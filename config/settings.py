@@ -1,7 +1,8 @@
 import os
 from enum import Enum
 from typing import Optional
-from pydantic import BaseSettings, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,8 +39,10 @@ class Settings(BaseSettings):
     default_temperature: float = Field(default=0.7)
     default_max_tokens: int = Field(default=4096)
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False,
+        "extra": "ignore"  # Ignore extra fields in .env
+    }
 
 settings = Settings()

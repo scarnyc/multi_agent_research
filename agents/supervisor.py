@@ -139,7 +139,7 @@ class SupervisorAgent(BaseAgent):
         message = await self.send_message(
             recipient=agent.agent_id,
             task_id=task.id,
-            payload={"task": task.dict()},
+            payload={"task": task.model_dump()},
             priority=Priority.HIGH
         )
         

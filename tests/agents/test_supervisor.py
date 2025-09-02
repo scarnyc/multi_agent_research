@@ -6,8 +6,8 @@ from uuid import uuid4
 
 from agents.supervisor import SupervisorAgent
 from agents.base import BaseAgent
-from agents.models import Task, TaskResult, Status, ComplexityLevel, Priority
-from config.settings import ModelType
+from agents.models import Task, TaskResult, Status, Priority, AgentMessage
+from config.settings import ModelType, ComplexityLevel
 
 class MockSubAgent(BaseAgent):
     """Mock sub-agent for testing."""
