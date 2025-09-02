@@ -58,7 +58,7 @@ class TestSupervisorAgent:
     async def test_analyze_query_complexity_simple(self, supervisor):
         with patch.object(supervisor, '_call_llm', new_callable=AsyncMock) as mock_llm:
             mock_response = Mock()
-            mock_response.choices = [Mock(message=Mock(content="SIMPLE"))]
+            mock_response.output_text = "SIMPLE"
             mock_llm.return_value = mock_response
             
             complexity = await supervisor.analyze_query_complexity("What is Python?")
@@ -68,7 +68,7 @@ class TestSupervisorAgent:
     async def test_analyze_query_complexity_moderate(self, supervisor):
         with patch.object(supervisor, '_call_llm', new_callable=AsyncMock) as mock_llm:
             mock_response = Mock()
-            mock_response.choices = [Mock(message=Mock(content="MODERATE"))]
+            mock_response.output_text = "MODERATE"
             mock_llm.return_value = mock_response
             
             complexity = await supervisor.analyze_query_complexity(
@@ -80,7 +80,7 @@ class TestSupervisorAgent:
     async def test_analyze_query_complexity_complex(self, supervisor):
         with patch.object(supervisor, '_call_llm', new_callable=AsyncMock) as mock_llm:
             mock_response = Mock()
-            mock_response.choices = [Mock(message=Mock(content="COMPLEX"))]
+            mock_response.output_text = "COMPLEX"
             mock_llm.return_value = mock_response
             
             complexity = await supervisor.analyze_query_complexity(
@@ -120,7 +120,7 @@ class TestSupervisorAgent:
             ]
             
             mock_response = Mock()
-            mock_response.choices = [Mock(message=Mock(content=json.dumps(tasks_json)))]
+            mock_response.output_text = json.dumps(tasks_json)
             mock_llm.return_value = mock_response
             
             tasks = await supervisor.decompose_query(sample_query)
@@ -152,7 +152,7 @@ class TestSupervisorAgent:
                 status=Status.COMPLETED,
                 result="Search results",
                 execution_time=1.5,
-                model_used="gpt-4o-mini"
+                model_used="gpt-5-mini"
             )
             mock_execute.return_value = mock_result
             
@@ -171,7 +171,7 @@ class TestSupervisorAgent:
                 result="Result 1: Quantum computing basics",
                 citations=[],
                 execution_time=1.0,
-                model_used="gpt-4o-mini",
+                model_used="gpt-5-mini",
                 tokens_used={"total": 100}
             ),
             TaskResult(
@@ -181,7 +181,7 @@ class TestSupervisorAgent:
                 result="Result 2: Recent developments",
                 citations=[],
                 execution_time=2.0,
-                model_used="gpt-4o-mini",
+                model_used="gpt-5-mini",
                 tokens_used={"total": 150}
             ),
             TaskResult(
@@ -191,14 +191,14 @@ class TestSupervisorAgent:
                 result=None,
                 citations=[],
                 execution_time=0.5,
-                model_used="gpt-4o-mini",
+                model_used="gpt-5-mini",
                 error="Citation error"
             )
         ]
         
         with patch.object(supervisor, '_call_llm', new_callable=AsyncMock) as mock_llm:
             mock_response = Mock()
-            mock_response.choices = [Mock(message=Mock(content="Synthesized response"))]
+            mock_response.output_text = "Synthesized response"
             mock_llm.return_value = mock_response
             
             result = await supervisor.aggregate_responses(responses)
@@ -229,7 +229,7 @@ class TestSupervisorAgent:
                     result="Python is a programming language",
                     citations=[],
                     execution_time=1.0,
-                    model_used="gpt-4o-mini"
+                    model_used="gpt-5-mini"
                 )
                 mock_delegate.return_value = mock_result
                 
@@ -265,7 +265,7 @@ class TestSupervisorAgent:
                             result="Economic data",
                             citations=[],
                             execution_time=1.0,
-                            model_used="gpt-4o-mini"
+                            model_used="gpt-5-mini"
                         ),
                         TaskResult(
                             agent_id="search",
@@ -274,7 +274,7 @@ class TestSupervisorAgent:
                             result="AI trends",
                             citations=[],
                             execution_time=1.5,
-                            model_used="gpt-4o-mini"
+                            model_used="gpt-5-mini"
                         )
                     ]
                     

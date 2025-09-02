@@ -54,13 +54,13 @@ class TestBaseAgent:
         assert len(agent.task_history) == 0
     
     def test_get_model_name(self, agent):
-        assert agent._model_name == "gpt-4o-mini"
+        assert agent._model_name == "gpt-5-mini"
         
         agent_regular = ConcreteAgent(
             agent_id="test",
             model_type=ModelType.GPT5_REGULAR
         )
-        assert agent_regular._model_name == "gpt-4o"
+        assert agent_regular._model_name == "gpt-5"
     
     @pytest.mark.asyncio
     async def test_receive_message(self, agent, sample_message):
@@ -106,7 +106,7 @@ class TestBaseAgent:
         assert result.status == Status.COMPLETED
         assert result.result == "Processed task: Test task description"
         assert result.execution_time > 0
-        assert result.model_used == "gpt-4o-mini"
+        assert result.model_used == "gpt-5-mini"
         assert result.error is None
         
         assert len(agent.task_history) == 1
@@ -124,21 +124,23 @@ class TestBaseAgent:
     
     @pytest.mark.asyncio
     async def test_call_llm_retry(self, agent):
-        with patch.object(agent.client.chat.completions, 'create', new_callable=AsyncMock) as mock_create:
-            mock_create.side_effect = [
+        # Test with Responses API
+        with patch.object(agent.client, 'responses', create=True) as mock_responses:
+            mock_responses.create = AsyncMock()
+            mock_responses.create.side_effect = [
                 Exception("API Error"),
-                Mock(choices=[Mock(message=Mock(content="Success"))])
+                Mock(output_text="Success", id="response_123")
             ]
             
-            response = await agent._call_llm([{"role": "user", "content": "test"}])
-            assert response.choices[0].message.content == "Success"
-            assert mock_create.call_count == 2
+            response = await agent._call_llm(input_text="test")
+            assert response.output_text == "Success"
+            assert mock_responses.create.call_count == 2
     
     def test_get_stats_empty(self, agent):
         stats = agent.get_stats()
         
         assert stats["agent_id"] == "test_agent"
-        assert stats["model_type"] == "gpt-4o-mini"
+        assert stats["model_type"] == "gpt-5-mini"
         assert stats["total_tasks"] == 0
         assert stats["completed_tasks"] == 0
         assert stats["failed_tasks"] == 0
@@ -156,7 +158,7 @@ class TestBaseAgent:
                 status=Status.COMPLETED,
                 result="success",
                 execution_time=2.0 + i,
-                model_used="gpt-4o-mini"
+                model_used="gpt-5-mini"
             )
             agent.task_history.append(task_result)
         

@@ -1,6 +1,6 @@
 # Multi-Agent Research System
 
-A production-ready multi-agent research system with intelligent orchestration, task delegation, and comprehensive evaluation capabilities. Built with OpenAI's GPT models and designed for scalability and reliability.
+A production-ready multi-agent research system with intelligent orchestration, task delegation, and comprehensive evaluation capabilities. Built with OpenAI's GPT-5 models and the new Responses API, designed for scalability, advanced reasoning, and reliability.
 
 ## 🏗 Architecture Overview
 
@@ -8,15 +8,15 @@ The system implements a **hierarchical multi-agent architecture** with intellige
 
 ```mermaid
 graph TB
-    User[User Query] --> Supervisor[Supervisor Agent<br/>GPT-4o]
+    User[User Query] --> Supervisor[Supervisor Agent<br/>GPT-5]
     
     Supervisor --> Complexity[Query Complexity Analysis]
     Complexity --> Simple[SIMPLE]
     Complexity --> Moderate[MODERATE] 
     Complexity --> Complex[COMPLEX]
     
-    Simple --> Nano[GPT-4o-mini<br/>Direct Response]
-    Moderate --> Mini[GPT-4o-mini<br/>Multi-step Processing]
+    Simple --> Nano[GPT-5-nano<br/>Direct Response]
+    Moderate --> Mini[GPT-5-mini<br/>Multi-step Processing]
     Complex --> Decompose[Task Decomposition]
     
     Decompose --> Search1[Search Agent 1]
@@ -88,13 +88,67 @@ classDiagram
 ## 🚀 Features
 
 - **Intelligent Query Routing**: Automatically routes queries to appropriate models based on complexity
+- **Advanced Reasoning**: Leverages GPT-5's chain-of-thought reasoning with configurable effort levels
 - **Multi-Agent Orchestration**: Supervisor agent coordinates multiple specialized agents
 - **Parallel Task Execution**: Independent tasks run concurrently for optimal performance
 - **Automatic Retry Logic**: Exponential backoff for API failures
 - **Comprehensive Error Handling**: Graceful degradation and error recovery
 - **Performance Tracking**: Built-in metrics and statistics
 - **Inter-Agent Communication**: Message passing protocol with priority handling
-- **Cost Optimization**: Uses cheaper models for simple tasks
+- **Cost Optimization**: Uses GPT-5-nano for simple tasks, scaling up as needed
+- **Verbosity Control**: Adjustable output length for optimized latency
+
+## 🧠 GPT-5 Advanced Features
+
+### Reasoning Effort Levels
+
+GPT-5 introduces configurable reasoning effort to balance performance and latency:
+
+| Effort Level | Use Case | Latency | Quality |
+|-------------|----------|---------|----------|
+| `minimal` | Simple instructions, classification | Fastest | Good for well-defined tasks |
+| `low` | Quick responses, basic analysis | Fast | Balanced performance |
+| `medium` | Standard reasoning tasks | Moderate | Default, reliable results |
+| `high` | Complex code, multi-step planning | Slower | Best for challenging problems |
+
+### Verbosity Control
+
+Control output length for optimized performance:
+
+```python
+# Low verbosity for quick responses
+response = await agent.generate(
+    input="Generate a SQL query",
+    reasoning={"effort": "low"},
+    text={"verbosity": "low"}  # Concise output
+)
+
+# High verbosity for detailed explanations
+response = await agent.generate(
+    input="Explain this algorithm",
+    reasoning={"effort": "medium"},
+    text={"verbosity": "high"}  # Comprehensive output
+)
+```
+
+### Responses API Integration
+
+The system uses GPT-5's new Responses API for enhanced reasoning:
+
+```python
+from openai import OpenAI
+client = OpenAI()
+
+# GPT-5 with reasoning chains
+result = client.responses.create(
+    model="gpt-5",
+    input="Your complex query here",
+    reasoning={"effort": "medium"},
+    text={"verbosity": "medium"},
+    # Pass previous reasoning for multi-turn efficiency
+    previous_response_id="prev_response_id"  
+)
+```
 
 ## 📋 Requirements
 
@@ -132,22 +186,34 @@ from agents.search import SearchAgent  # To be implemented
 from agents.citation import CitationAgent  # To be implemented
 
 async def main():
-    # Initialize supervisor
-    supervisor = SupervisorAgent()
+    # Initialize supervisor with GPT-5
+    supervisor = SupervisorAgent(
+        reasoning_effort="medium",  # medium reasoning for orchestration
+        verbosity="medium"          # balanced output length
+    )
     
-    # Register specialized agents
-    search_agent = SearchAgent(agent_id="search_1")
-    citation_agent = CitationAgent(agent_id="citation_1")
+    # Register specialized agents with appropriate models
+    search_agent = SearchAgent(
+        agent_id="search_1",
+        model_type="gpt-5-mini",
+        reasoning_effort="low"
+    )
+    citation_agent = CitationAgent(
+        agent_id="citation_1",
+        model_type="gpt-5-nano",
+        reasoning_effort="minimal"
+    )
     
     supervisor.register_agent(search_agent)
     supervisor.register_agent(citation_agent)
     
-    # Process a research query
+    # Process a research query with GPT-5's advanced reasoning
     query = "What are the latest developments in quantum computing?"
     result = await supervisor.orchestrate(query)
     
     print(f"Response: {result['response']}")
     print(f"Citations: {result['citations']}")
+    print(f"Reasoning tokens: {result['reasoning_tokens']}")
     print(f"Execution time: {result['execution_time']}s")
 
 # Run the example
@@ -161,30 +227,35 @@ from agents.base import BaseAgent
 from agents.models import Task, TaskResult, Status
 
 class CustomAnalysisAgent(BaseAgent):
-    """Custom agent for specialized analysis."""
+    """Custom agent for specialized analysis using GPT-5."""
     
     async def process_task(self, task: Task) -> Any:
-        # Your custom processing logic
+        # Your custom processing logic with GPT-5 Responses API
         prompt = f"Analyze this data: {task.description}"
         
-        messages = [
-            {"role": "system", "content": "You are a data analyst."},
-            {"role": "user", "content": prompt}
-        ]
-        
-        response = await self._call_llm(messages)
-        return response.choices[0].message.content
+        # Using the new Responses API
+        response = await self._call_llm(
+            input=prompt,
+            reasoning={"effort": "medium"},
+            text={"verbosity": "medium"}
+        )
+        return response.output_text
     
     async def _process_critical_message(self, message: AgentMessage) -> None:
         # Handle critical messages
         logger.warning(f"Critical message: {message.payload}")
 
-# Register and use custom agent
+# Register and use custom agent with GPT-5
 async def use_custom_agent():
-    supervisor = SupervisorAgent()
+    supervisor = SupervisorAgent(
+        reasoning_effort="medium",
+        verbosity="medium"
+    )
     custom_agent = CustomAnalysisAgent(
         agent_id="custom_analysis",
-        model_type=ModelType.GPT5_MINI
+        model_type="gpt-5-mini",
+        reasoning_effort="low",
+        verbosity="low"
     )
     
     supervisor.register_agent(custom_agent)
@@ -306,11 +377,11 @@ AgentMessage:
 
 ### 3. Model Routing Strategy
 
-| Complexity | Model | Use Case | Cost |
-|------------|-------|----------|------|
-| SIMPLE | GPT-4o-mini | Facts, definitions | $ |
-| MODERATE | GPT-4o-mini | 2-3 step reasoning | $$ |
-| COMPLEX | GPT-4o | Deep analysis | $$$ |
+| Complexity | Model | Reasoning Effort | Use Case | Cost |
+|------------|-------|-----------------|----------|------|
+| SIMPLE | GPT-5-nano | minimal | Facts, definitions, classification | $ |
+| MODERATE | GPT-5-mini | low | Multi-step reasoning, synthesis | $$ |
+| COMPLEX | GPT-5 | medium/high | Deep analysis, code generation | $$$ |
 
 ### 4. Performance Optimizations
 
@@ -328,10 +399,14 @@ AgentMessage:
 # Required
 OPENAI_API_KEY=your_openai_api_key
 
-# Optional - Model Configuration
-GPT5_REGULAR_MODEL=gpt-4o         # Most capable model
-GPT5_MINI_MODEL=gpt-4o-mini       # Balanced model
-GPT5_NANO_MODEL=gpt-4o-mini       # Fastest model
+# Optional - Model Configuration (GPT-5 Series)
+GPT5_REGULAR_MODEL=gpt-5           # Most capable model with advanced reasoning
+GPT5_MINI_MODEL=gpt-5-mini         # Cost-optimized reasoning model
+GPT5_NANO_MODEL=gpt-5-nano         # High-throughput, minimal reasoning
+
+# Optional - GPT-5 Reasoning Configuration
+DEFAULT_REASONING_EFFORT=medium    # minimal, low, medium, high
+DEFAULT_VERBOSITY=medium           # low, medium, high
 
 # Optional - Phoenix Monitoring
 PHOENIX_ENDPOINT=http://localhost:6006
@@ -454,4 +529,4 @@ For questions and support:
 
 ---
 
-**Built with ❤️ using Claude Code and OpenAI GPT-4**
+**Built with ❤️ using Claude Code and OpenAI GPT-5**

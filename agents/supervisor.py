@@ -9,19 +9,22 @@ from agents.models import (
     AgentMessage, Task, TaskResult, Status, Priority,
     Citation, SearchResults
 )
-from config.settings import settings, ComplexityLevel, ModelType
+from config.settings import settings, ComplexityLevel, ModelType, ReasoningEffort, Verbosity
 
 logger = logging.getLogger(__name__)
 
 class SupervisorAgent(BaseAgent):
     """Supervisor agent that orchestrates task delegation and response aggregation."""
     
-    def __init__(self):
+    def __init__(self, reasoning_effort: ReasoningEffort = ReasoningEffort.MEDIUM, 
+                 verbosity: Verbosity = Verbosity.MEDIUM):
         super().__init__(
             agent_id="supervisor",
             model_type=ModelType.GPT5_REGULAR,
             temperature=0.3,  # Lower temperature for more consistent orchestration
-            max_tokens=4096
+            max_tokens=4096,
+            reasoning_effort=reasoning_effort,
+            verbosity=verbosity
         )
         self.sub_agents: Dict[str, BaseAgent] = {}
         self.active_tasks: Dict[str, List[Task]] = {}
@@ -34,25 +37,27 @@ class SupervisorAgent(BaseAgent):
     async def analyze_query_complexity(self, query: str) -> ComplexityLevel:
         """Analyze the complexity of a user query to determine routing."""
         
-        messages = [
-            {
-                "role": "system",
-                "content": """Analyze the complexity of the given query and classify it as:
-                - SIMPLE: Factual queries, definitions, simple lookups (< 100 tokens, single concept)
-                - MODERATE: Multi-step reasoning, synthesis of 2-3 sources (< 500 tokens, 2-3 concepts)
-                - COMPLEX: Deep analysis, multiple domains, creative tasks (> 500 tokens or multiple domains)
-                
-                Respond with only: SIMPLE, MODERATE, or COMPLEX"""
-            },
-            {
-                "role": "user",
-                "content": f"Query: {query}"
-            }
-        ]
+        prompt = f"""Analyze the complexity of the given query and classify it as:
+        - SIMPLE: Factual queries, definitions, simple lookups (< 100 tokens, single concept)
+        - MODERATE: Multi-step reasoning, synthesis of 2-3 sources (< 500 tokens, 2-3 concepts)
+        - COMPLEX: Deep analysis, multiple domains, creative tasks (> 500 tokens or multiple domains)
+        
+        Query: {query}
+        
+        Respond with only: SIMPLE, MODERATE, or COMPLEX"""
         
         try:
-            response = await self._call_llm(messages)
-            complexity_str = response.choices[0].message.content.strip().upper()
+            # Use minimal reasoning for this classification task
+            original_effort = self.reasoning_effort
+            self.reasoning_effort = ReasoningEffort.MINIMAL
+            
+            response = await self._call_llm(input_text=prompt)
+            
+            # Restore original reasoning effort
+            self.reasoning_effort = original_effort
+            
+            # Extract complexity from response
+            complexity_str = response.output_text.strip().upper() if hasattr(response, 'output_text') else response.choices[0].message.content.strip().upper()
             
             # Map to ComplexityLevel enum
             if complexity_str == "SIMPLE":
@@ -76,38 +81,50 @@ class SupervisorAgent(BaseAgent):
         else:
             return ModelType.GPT5_REGULAR
     
+    def get_reasoning_effort(self, complexity: ComplexityLevel) -> ReasoningEffort:
+        """Determine reasoning effort based on complexity."""
+        if complexity == ComplexityLevel.SIMPLE:
+            return ReasoningEffort.MINIMAL
+        elif complexity == ComplexityLevel.MODERATE:
+            return ReasoningEffort.LOW
+        else:
+            return ReasoningEffort.MEDIUM  # or HIGH for very complex tasks
+    
     async def decompose_query(self, query: str) -> List[Task]:
         """Decompose a complex query into subtasks."""
         
-        messages = [
-            {
-                "role": "system",
-                "content": """You are a task decomposition specialist. Break down the user's query into specific subtasks.
-                Each subtask should be:
-                1. Atomic and focused on a single objective
-                2. Assigned to the appropriate agent type (search, citation, analysis)
-                3. Include any dependencies on other tasks
-                
-                Return a JSON array of tasks with the following structure:
-                [
-                    {
-                        "id": "unique_task_id",
-                        "description": "task description",
-                        "agent_type": "search|citation|analysis",
-                        "dependencies": ["task_id1", "task_id2"],
-                        "priority": "low|medium|high|critical"
-                    }
-                ]"""
-            },
-            {
-                "role": "user",
-                "content": f"Query: {query}"
-            }
+        prompt = f"""You are a task decomposition specialist. Break down the user's query into specific subtasks.
+        Each subtask should be:
+        1. Atomic and focused on a single objective
+        2. Assigned to the appropriate agent type (search, citation, analysis)
+        3. Include any dependencies on other tasks
+        
+        Return a JSON array of tasks with the following structure:
+        [
+            {{
+                "id": "unique_task_id",
+                "description": "task description",
+                "agent_type": "search|citation|analysis",
+                "dependencies": ["task_id1", "task_id2"],
+                "priority": "low|medium|high|critical"
+            }}
         ]
         
+        Query: {query}"""
+        
         try:
-            response = await self._call_llm(messages)
-            tasks_json = json.loads(response.choices[0].message.content)
+            # Use higher reasoning for task decomposition
+            original_effort = self.reasoning_effort
+            self.reasoning_effort = ReasoningEffort.MEDIUM
+            
+            response = await self._call_llm(input_text=prompt)
+            
+            # Restore original reasoning effort
+            self.reasoning_effort = original_effort
+            
+            # Extract JSON from response
+            response_text = response.output_text if hasattr(response, 'output_text') else response.choices[0].message.content
+            tasks_json = json.loads(response_text)
             
             tasks = []
             for task_data in tasks_json:
@@ -168,22 +185,18 @@ class SupervisorAgent(BaseAgent):
             for r in successful_results
         ])
         
-        messages = [
-            {
-                "role": "system",
-                "content": """You are a research synthesis specialist. 
-                Combine the following task results into a coherent, comprehensive response.
-                Maintain factual accuracy and properly attribute information to sources."""
-            },
-            {
-                "role": "user",
-                "content": f"Task Results:\n{results_text}\n\nSynthesize these results into a unified response."
-            }
-        ]
+        prompt = f"""You are a research synthesis specialist. 
+        Combine the following task results into a coherent, comprehensive response.
+        Maintain factual accuracy and properly attribute information to sources.
+        
+        Task Results:
+        {results_text}
+        
+        Synthesize these results into a unified response."""
         
         try:
-            response = await self._call_llm(messages)
-            synthesized_response = response.choices[0].message.content
+            response = await self._call_llm(input_text=prompt)
+            synthesized_response = response.output_text if hasattr(response, 'output_text') else response.choices[0].message.content
             
             return {
                 "response": synthesized_response,

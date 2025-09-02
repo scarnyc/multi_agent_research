@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from agents.models import AgentMessage, Task, TaskResult, Status, Priority
-from config.settings import settings, ModelType
+from config.settings import settings, ModelType, ReasoningEffort, Verbosity
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +21,21 @@ class BaseAgent(ABC):
         agent_id: str,
         model_type: ModelType = ModelType.GPT5_MINI,
         temperature: float = 0.7,
-        max_tokens: int = 4096
+        max_tokens: int = 4096,
+        reasoning_effort: ReasoningEffort = ReasoningEffort.MEDIUM,
+        verbosity: Verbosity = Verbosity.MEDIUM
     ):
         self.agent_id = agent_id
         self.model_type = model_type
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.reasoning_effort = reasoning_effort
+        self.verbosity = verbosity
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
         self.message_queue: List[AgentMessage] = []
         self.task_history: List[TaskResult] = []
         self._model_name = self._get_model_name(model_type)
+        self._previous_response_id: Optional[str] = None  # For multi-turn reasoning
         
     def _get_model_name(self, model_type: ModelType) -> str:
         """Get the actual model name from the model type."""
@@ -47,26 +52,51 @@ class BaseAgent(ABC):
     )
     async def _call_llm(
         self,
-        messages: List[Dict[str, str]],
+        input_text: str = None,
+        messages: List[Dict[str, str]] = None,
         tools: Optional[List[Dict]] = None,
         tool_choice: Optional[str] = None
     ) -> Any:
-        """Make a call to the OpenAI API with retry logic."""
+        """Make a call to the OpenAI API with retry logic using Responses API."""
         try:
-            kwargs = {
-                "model": self._model_name,
-                "messages": messages,
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-            }
-            
-            if tools:
-                kwargs["tools"] = tools
-                if tool_choice:
-                    kwargs["tool_choice"] = tool_choice
-                    
-            response = await self.client.chat.completions.create(**kwargs)
-            return response
+            if settings.use_responses_api and input_text:
+                # Use the new Responses API for GPT-5
+                kwargs = {
+                    "model": self._model_name,
+                    "input": input_text,
+                    "reasoning": {"effort": self.reasoning_effort.value},
+                    "text": {"verbosity": self.verbosity.value},
+                }
+                
+                # Include previous response ID for multi-turn efficiency
+                if self._previous_response_id:
+                    kwargs["previous_response_id"] = self._previous_response_id
+                
+                if tools:
+                    kwargs["tools"] = tools
+                    if tool_choice:
+                        kwargs["tool_choice"] = tool_choice
+                        
+                response = await self.client.responses.create(**kwargs)
+                # Store response ID for next turn
+                self._previous_response_id = response.id
+                return response
+            else:
+                # Fallback to Chat Completions API for backward compatibility
+                kwargs = {
+                    "model": self._model_name,
+                    "messages": messages or [{"role": "user", "content": input_text}],
+                    "temperature": self.temperature,
+                    "max_tokens": self.max_tokens,
+                }
+                
+                if tools:
+                    kwargs["tools"] = tools
+                    if tool_choice:
+                        kwargs["tool_choice"] = tool_choice
+                        
+                response = await self.client.chat.completions.create(**kwargs)
+                return response
             
         except Exception as e:
             logger.error(f"Error calling LLM for agent {self.agent_id}: {str(e)}")

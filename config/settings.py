@@ -8,21 +8,37 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class ComplexityLevel(Enum):
-    SIMPLE = "gpt-4o-mini"      # Factual queries, definitions, simple lookups
-    MODERATE = "gpt-4o-mini"    # Multi-step reasoning, synthesis of 2-3 sources  
-    COMPLEX = "gpt-4o"          # Deep analysis, multiple domains, creative tasks
+    SIMPLE = "gpt-5-nano"       # Factual queries, definitions, simple lookups
+    MODERATE = "gpt-5-mini"     # Multi-step reasoning, synthesis of 2-3 sources  
+    COMPLEX = "gpt-5"           # Deep analysis, multiple domains, creative tasks
 
 class ModelType(Enum):
-    GPT5_NANO = "gpt-4o-mini"
-    GPT5_MINI = "gpt-4o-mini"
-    GPT5_REGULAR = "gpt-4o"
+    GPT5_NANO = "gpt-5-nano"
+    GPT5_MINI = "gpt-5-mini"
+    GPT5_REGULAR = "gpt-5"
+
+class ReasoningEffort(Enum):
+    MINIMAL = "minimal"     # Fastest, minimal reasoning tokens
+    LOW = "low"            # Quick responses, basic reasoning
+    MEDIUM = "medium"      # Default, balanced reasoning
+    HIGH = "high"          # Thorough reasoning for complex tasks
+
+class Verbosity(Enum):
+    LOW = "low"            # Concise outputs
+    MEDIUM = "medium"      # Balanced output length
+    HIGH = "high"          # Detailed, comprehensive outputs
 
 class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY"))
-    gpt5_regular_model: str = Field(default="gpt-4o")
-    gpt5_mini_model: str = Field(default="gpt-4o-mini")
-    gpt5_nano_model: str = Field(default="gpt-4o-mini")
+    gpt5_regular_model: str = Field(default="gpt-5")
+    gpt5_mini_model: str = Field(default="gpt-5-mini")
+    gpt5_nano_model: str = Field(default="gpt-5-nano")
+    
+    # GPT-5 Specific Configuration
+    default_reasoning_effort: ReasoningEffort = Field(default=ReasoningEffort.MEDIUM)
+    default_verbosity: Verbosity = Field(default=Verbosity.MEDIUM)
+    use_responses_api: bool = Field(default=True)  # Use new Responses API
     
     # Phoenix Configuration
     phoenix_endpoint: str = Field(default="http://localhost:6006")
