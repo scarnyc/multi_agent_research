@@ -42,7 +42,13 @@ class Settings(BaseSettings):
     
     # Phoenix Configuration
     phoenix_endpoint: str = Field(default="http://localhost:6006")
+    phoenix_base_url: str = Field(default_factory=lambda: os.getenv("PHOENIX_BASE_URL", "http://localhost:6006"))
     phoenix_api_key: Optional[str] = Field(default_factory=lambda: os.getenv("PHOENIX_API_KEY"))
+    
+    # Phoenix MCP Server Configuration
+    phoenix_mcp_server_url: str = Field(default_factory=lambda: os.getenv("PHOENIX_MCP_SERVER_URL", "http://localhost:6006/mcp"))
+    phoenix_mcp_require_approval: str = Field(default_factory=lambda: os.getenv("PHOENIX_MCP_REQUIRE_APPROVAL", "never"))
+    phoenix_mcp_server_label: str = Field(default_factory=lambda: os.getenv("PHOENIX_MCP_SERVER_LABEL", "phoenix"))
     
     # Application Settings
     max_concurrent_requests: int = Field(default=10)

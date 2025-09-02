@@ -279,7 +279,7 @@ class SupervisorAgent(BaseAgent):
                 # Implementation for task recovery
                 pass
     
-    async def orchestrate(self, query: str) -> Dict[str, Any]:
+    async def orchestrate(self, query: str, trace_id: str = None) -> Dict[str, Any]:
         """Main orchestration entry point for processing user queries."""
         
         # Create main task
@@ -290,6 +290,13 @@ class SupervisorAgent(BaseAgent):
         )
         
         logger.info(f"Starting orchestration for task {main_task.id}")
+        
+        # Set up Phoenix tracing if trace_id provided
+        if trace_id:
+            await self.set_trace_context(trace_id)
+            # Also set trace context for all registered sub-agents
+            for agent in self.sub_agents.values():
+                await agent.set_trace_context(trace_id)
         
         try:
             result = await self.process_task(main_task)
@@ -305,3 +312,9 @@ class SupervisorAgent(BaseAgent):
                 "task_id": main_task.id,
                 "error": str(e)
             }
+        finally:
+            # Clear trace context after orchestration
+            if trace_id:
+                await self.clear_trace_context()
+                for agent in self.sub_agents.values():
+                    await agent.clear_trace_context()

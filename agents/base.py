@@ -13,6 +13,20 @@ from config.settings import settings, ModelType, ReasoningEffort, Verbosity
 
 logger = logging.getLogger(__name__)
 
+# Import Phoenix integration (lazy loading to avoid circular imports)
+_phoenix_integration = None
+
+def get_phoenix_integration():
+    global _phoenix_integration
+    if _phoenix_integration is None:
+        try:
+            from evaluation.phoenix_integration import phoenix_integration
+            _phoenix_integration = phoenix_integration
+        except ImportError:
+            logger.warning("Phoenix integration not available")
+            _phoenix_integration = None
+    return _phoenix_integration
+
 class BaseAgent(ABC):
     """Base class for all agents in the multi-agent system."""
     
@@ -23,7 +37,8 @@ class BaseAgent(ABC):
         temperature: float = 0.7,
         max_tokens: int = 4096,
         reasoning_effort: ReasoningEffort = ReasoningEffort.MEDIUM,
-        verbosity: Verbosity = Verbosity.MEDIUM
+        verbosity: Verbosity = Verbosity.MEDIUM,
+        enable_phoenix_tracing: bool = True
     ):
         self.agent_id = agent_id
         self.model_type = model_type
@@ -31,11 +46,16 @@ class BaseAgent(ABC):
         self.max_tokens = max_tokens
         self.reasoning_effort = reasoning_effort
         self.verbosity = verbosity
+        self.enable_phoenix_tracing = enable_phoenix_tracing
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
         self.message_queue: List[AgentMessage] = []
         self.task_history: List[TaskResult] = []
         self._model_name = self._get_model_name(model_type)
         self._previous_response_id: Optional[str] = None  # For multi-turn reasoning
+        
+        # Phoenix tracing state
+        self._current_trace_id: Optional[str] = None
+        self._current_span_id: Optional[str] = None
         
     def _get_model_name(self, model_type: ModelType) -> str:
         """Get the actual model name from the model type."""
@@ -58,6 +78,28 @@ class BaseAgent(ABC):
         tool_choice: Optional[str] = None
     ) -> Any:
         """Make a call to the OpenAI API with retry logic using Responses API."""
+        start_time = datetime.now()
+        span_id = None
+        
+        # Start Phoenix tracing if enabled
+        phoenix = get_phoenix_integration() if self.enable_phoenix_tracing else None
+        if phoenix and self._current_trace_id:
+            try:
+                span_id = await phoenix.create_span(
+                    trace_id=self._current_trace_id,
+                    span_name=f"{self.agent_id}_llm_call",
+                    span_type="llm",
+                    parent_span_id=self._current_span_id,
+                    metadata={
+                        "model": self._model_name,
+                        "reasoning_effort": self.reasoning_effort.value,
+                        "verbosity": self.verbosity.value,
+                        "input_length": len(input_text) if input_text else 0
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create Phoenix span: {e}")
+        
         try:
             if settings.use_responses_api and input_text:
                 # Use the new Responses API for GPT-5
@@ -72,6 +114,22 @@ class BaseAgent(ABC):
                 if self._previous_response_id:
                     kwargs["previous_response_id"] = self._previous_response_id
                 
+                # Add Phoenix MCP tool if not already present
+                if tools is None:
+                    tools = []
+                
+                # Optionally add Phoenix MCP tool for direct Phoenix integration
+                if phoenix and settings.phoenix_api_key:
+                    phoenix_mcp_tool = {
+                        "type": "mcp",
+                        "server_label": settings.phoenix_mcp_server_label,
+                        "server_url": settings.phoenix_mcp_server_url,
+                        "authorization": settings.phoenix_api_key,
+                        "require_approval": settings.phoenix_mcp_require_approval,
+                        "allowed_tools": ["log_span", "create_annotation"]  # Limit to logging tools
+                    }
+                    tools.append(phoenix_mcp_tool)
+                
                 if tools:
                     kwargs["tools"] = tools
                     if tool_choice:
@@ -80,6 +138,44 @@ class BaseAgent(ABC):
                 response = await self.client.responses.create(**kwargs)
                 # Store response ID for next turn
                 self._previous_response_id = response.id
+                
+                # Extract response text and token usage
+                output_text = response.output_text if hasattr(response, 'output_text') else ""
+                token_usage = getattr(response, 'token_usage', {})
+                
+                execution_time = (datetime.now() - start_time).total_seconds()
+                
+                # Log to Phoenix if tracing enabled
+                if phoenix and span_id and self._current_trace_id:
+                    try:
+                        await phoenix.log_agent_interaction(
+                            trace_id=self._current_trace_id,
+                            agent_id=self.agent_id,
+                            input_message=input_text,
+                            output_message=output_text,
+                            model_used=self._model_name,
+                            tokens_used={
+                                "total": token_usage.get("total_tokens", 0),
+                                "prompt": token_usage.get("prompt_tokens", 0),
+                                "completion": token_usage.get("completion_tokens", 0)
+                            },
+                            execution_time=execution_time,
+                            parent_span_id=self._current_span_id
+                        )
+                        
+                        await phoenix.end_span(
+                            trace_id=self._current_trace_id,
+                            span_id=span_id,
+                            status="success",
+                            result=output_text,
+                            metrics={
+                                "tokens_total": token_usage.get("total_tokens", 0),
+                                "execution_time_ms": execution_time * 1000
+                            }
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to log to Phoenix: {e}")
+                
                 return response
             else:
                 # Fallback to Chat Completions API for backward compatibility
@@ -96,9 +192,44 @@ class BaseAgent(ABC):
                         kwargs["tool_choice"] = tool_choice
                         
                 response = await self.client.chat.completions.create(**kwargs)
+                
+                # Log to Phoenix for Chat Completions API too
+                if phoenix and span_id and self._current_trace_id:
+                    try:
+                        execution_time = (datetime.now() - start_time).total_seconds()
+                        output_text = response.choices[0].message.content if response.choices else ""
+                        token_usage = response.usage.model_dump() if response.usage else {}
+                        
+                        await phoenix.end_span(
+                            trace_id=self._current_trace_id,
+                            span_id=span_id,
+                            status="success",
+                            result=output_text,
+                            metrics={
+                                "tokens_total": token_usage.get("total_tokens", 0),
+                                "execution_time_ms": execution_time * 1000
+                            }
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to log to Phoenix: {e}")
+                
                 return response
             
         except Exception as e:
+            # Log error to Phoenix if tracing enabled
+            if phoenix and span_id and self._current_trace_id:
+                try:
+                    execution_time = (datetime.now() - start_time).total_seconds()
+                    await phoenix.end_span(
+                        trace_id=self._current_trace_id,
+                        span_id=span_id,
+                        status="error",
+                        error=str(e),
+                        metrics={"execution_time_ms": execution_time * 1000}
+                    )
+                except Exception as phoenix_error:
+                    logger.warning(f"Failed to log error to Phoenix: {phoenix_error}")
+            
             logger.error(f"Error calling LLM for agent {self.agent_id}: {str(e)}")
             raise
     
@@ -136,9 +267,42 @@ class BaseAgent(ABC):
         """Handle critical priority messages immediately."""
         pass
     
+    async def set_trace_context(self, trace_id: str, parent_span_id: str = None) -> None:
+        """Set the Phoenix trace context for this agent."""
+        self._current_trace_id = trace_id
+        self._current_span_id = parent_span_id
+    
+    async def clear_trace_context(self) -> None:
+        """Clear the Phoenix trace context."""
+        self._current_trace_id = None
+        self._current_span_id = None
+    
     async def execute(self, task: Task) -> TaskResult:
         """Execute a task and return the result."""
         start_time = datetime.now()
+        task_span_id = None
+        
+        # Start Phoenix span for task execution
+        phoenix = get_phoenix_integration() if self.enable_phoenix_tracing else None
+        if phoenix and self._current_trace_id:
+            try:
+                task_span_id = await phoenix.create_span(
+                    trace_id=self._current_trace_id,
+                    span_name=f"{self.agent_id}_execute_task",
+                    span_type="task",
+                    parent_span_id=self._current_span_id,
+                    metadata={
+                        "task_id": task.id,
+                        "task_description": task.description[:200],  # Truncate for readability
+                        "agent_id": self.agent_id,
+                        "model": self._model_name
+                    }
+                )
+                # Update current span context for nested calls
+                original_span_id = self._current_span_id
+                self._current_span_id = task_span_id
+            except Exception as e:
+                logger.warning(f"Failed to create Phoenix task span: {e}")
         
         try:
             result = await self.process_task(task)
@@ -152,6 +316,22 @@ class BaseAgent(ABC):
                 execution_time=execution_time,
                 model_used=self._model_name
             )
+            
+            # End Phoenix span on success
+            if phoenix and task_span_id and self._current_trace_id:
+                try:
+                    await phoenix.end_span(
+                        trace_id=self._current_trace_id,
+                        span_id=task_span_id,
+                        status="success",
+                        result=str(result)[:500] if result else None,  # Truncate result
+                        metrics={
+                            "execution_time_ms": execution_time * 1000,
+                            "model_used": self._model_name
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to end Phoenix task span: {e}")
             
             self.task_history.append(task_result)
             return task_result
@@ -169,9 +349,29 @@ class BaseAgent(ABC):
                 error=str(e)
             )
             
+            # End Phoenix span on error
+            if phoenix and task_span_id and self._current_trace_id:
+                try:
+                    await phoenix.end_span(
+                        trace_id=self._current_trace_id,
+                        span_id=task_span_id,
+                        status="error",
+                        error=str(e),
+                        metrics={
+                            "execution_time_ms": execution_time * 1000,
+                            "model_used": self._model_name
+                        }
+                    )
+                except Exception as phoenix_error:
+                    logger.warning(f"Failed to end Phoenix task span on error: {phoenix_error}")
+            
             self.task_history.append(task_result)
             logger.error(f"Agent {self.agent_id} failed to execute task {task.id}: {str(e)}")
             return task_result
+        finally:
+            # Restore original span context
+            if phoenix and task_span_id:
+                self._current_span_id = original_span_id if 'original_span_id' in locals() else None
     
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about this agent's performance."""
