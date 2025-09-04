@@ -4,7 +4,7 @@ Comprehensive test of OpenAI Agents SDK compatibility with GPT-5 models
 """
 import os
 from openai import OpenAI
-from config import config
+from config.settings import settings
 import time
 
 def test_direct_gpt5_calls():

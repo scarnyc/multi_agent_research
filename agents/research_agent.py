@@ -7,7 +7,7 @@ import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from openai import OpenAI
-from config import config, ComplexityLevel
+from config.settings import settings, ComplexityLevel
 from pydantic import BaseModel
 
 @dataclass
@@ -153,7 +153,7 @@ class ResearchAgent:
     """Main research agent with model routing and web search"""
     
     def __init__(self):
-        self.client = OpenAI(api_key=config.openai_api_key)
+        self.client = OpenAI(api_key=settings.openai_api_key)
         self.complexity_analyzer = ComplexityAnalyzer()
         self.search_agent = WebSearchAgent(self.client)
     
@@ -162,7 +162,7 @@ class ResearchAgent:
         
         # Determine complexity and select model
         complexity = complexity_override or self.complexity_analyzer.analyze_complexity(query)
-        model = config.model_for_complexity[complexity]
+        model = settings.model_for_complexity[complexity]
         
         print(f"Query: {query}")
         print(f"Detected complexity: {complexity.value} → Using model: {model}")
