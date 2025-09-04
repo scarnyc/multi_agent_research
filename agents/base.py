@@ -38,7 +38,7 @@ class BaseAgent(ABC):
         max_tokens: int = 4096,
         reasoning_effort: ReasoningEffort = ReasoningEffort.MEDIUM,
         verbosity: Verbosity = Verbosity.MEDIUM,
-        enable_phoenix_tracing: bool = True
+        enable_phoenix_tracing: bool = None
     ):
         self.agent_id = agent_id
         self.model_type = model_type
@@ -46,12 +46,17 @@ class BaseAgent(ABC):
         self.max_tokens = max_tokens
         self.reasoning_effort = reasoning_effort
         self.verbosity = verbosity
-        self.enable_phoenix_tracing = enable_phoenix_tracing
+        # Auto-disable Phoenix if no API key or explicitly disabled
+        self.enable_phoenix_tracing = (
+            enable_phoenix_tracing if enable_phoenix_tracing is not None 
+            else settings.enable_phoenix_integration
+        )
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
         self.message_queue: List[AgentMessage] = []
         self.task_history: List[TaskResult] = []
         self._model_name = self._get_model_name(model_type)
         self._previous_response_id: Optional[str] = None  # For multi-turn reasoning
+        self._current_task_tokens = {}  # Track tokens for current task
         
         # Phoenix tracing state
         self._current_trace_id: Optional[str] = None
@@ -114,21 +119,9 @@ class BaseAgent(ABC):
                 if self._previous_response_id:
                     kwargs["previous_response_id"] = self._previous_response_id
                 
-                # Add Phoenix MCP tool if not already present
+                # Skip Phoenix MCP tool integration due to API issues - Phoenix tracing still works via integration layer
                 if tools is None:
                     tools = []
-                
-                # Optionally add Phoenix MCP tool for direct Phoenix integration
-                if phoenix and settings.phoenix_api_key:
-                    phoenix_mcp_tool = {
-                        "type": "mcp",
-                        "server_label": settings.phoenix_mcp_server_label,
-                        "server_url": settings.phoenix_mcp_server_url,
-                        "authorization": settings.phoenix_api_key,
-                        "require_approval": settings.phoenix_mcp_require_approval,
-                        "allowed_tools": ["log_span", "create_annotation"]  # Limit to logging tools
-                    }
-                    tools.append(phoenix_mcp_tool)
                 
                 if tools:
                     kwargs["tools"] = tools
@@ -142,6 +135,19 @@ class BaseAgent(ABC):
                 # Extract response text and token usage
                 output_text = response.output_text if hasattr(response, 'output_text') else ""
                 token_usage = getattr(response, 'token_usage', {})
+                
+                # Debug: Log token usage to understand the structure
+                print(f"DEBUG: Response attributes: {dir(response)}")
+                print(f"DEBUG: Token usage from Responses API: {token_usage}")
+                if hasattr(response, 'usage'):
+                    print(f"DEBUG: Response usage: {response.usage}")
+                if not token_usage:
+                    print("DEBUG: No token usage data from Responses API")
+                
+                # Accumulate token usage for current task
+                for key in ['total_tokens', 'prompt_tokens', 'completion_tokens']:
+                    if key in token_usage:
+                        self._current_task_tokens[key] = self._current_task_tokens.get(key, 0) + token_usage[key]
                 
                 execution_time = (datetime.now() - start_time).total_seconds()
                 
@@ -193,12 +199,19 @@ class BaseAgent(ABC):
                         
                 response = await self.client.chat.completions.create(**kwargs)
                 
+                # Extract token usage for Chat Completions API
+                token_usage = response.usage.model_dump() if response.usage else {}
+                
+                # Accumulate token usage for current task
+                for key in ['total_tokens', 'prompt_tokens', 'completion_tokens']:
+                    if key in token_usage:
+                        self._current_task_tokens[key] = self._current_task_tokens.get(key, 0) + token_usage[key]
+                
                 # Log to Phoenix for Chat Completions API too
                 if phoenix and span_id and self._current_trace_id:
                     try:
                         execution_time = (datetime.now() - start_time).total_seconds()
                         output_text = response.choices[0].message.content if response.choices else ""
-                        token_usage = response.usage.model_dump() if response.usage else {}
                         
                         await phoenix.end_span(
                             trace_id=self._current_trace_id,
@@ -305,6 +318,9 @@ class BaseAgent(ABC):
                 logger.warning(f"Failed to create Phoenix task span: {e}")
         
         try:
+            # Reset token tracking for this task
+            self._current_task_tokens = {}
+            
             result = await self.process_task(task)
             execution_time = (datetime.now() - start_time).total_seconds()
             
@@ -314,7 +330,8 @@ class BaseAgent(ABC):
                 status=Status.COMPLETED,
                 result=result,
                 execution_time=execution_time,
-                model_used=self._model_name
+                model_used=self._model_name,
+                tokens_used=self._current_task_tokens.copy()
             )
             
             # End Phoenix span on success
@@ -346,6 +363,7 @@ class BaseAgent(ABC):
                 result=None,
                 execution_time=execution_time,
                 model_used=self._model_name,
+                tokens_used=self._current_task_tokens.copy(),
                 error=str(e)
             )
             

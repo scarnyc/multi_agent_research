@@ -75,22 +75,41 @@ class WebSearchAgent:
         try:
             start_time = time.time()
             
-            # GPT-5 models have different parameter requirements
-            chat_params = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": query}
-                ],
-                "max_completion_tokens": 1000
-            }
+            # Use the BaseAgent's _call_llm method for proper API handling
+            # This will automatically use Responses API if enabled
+            full_prompt = f"{system_prompt}\n\nUser: {query}\nAssistant:"
             
-            # GPT-5 models don't support temperature parameter - use default
-            
-            response = self.client.chat.completions.create(**chat_params)
-            
-            execution_time = time.time() - start_time
-            content = response.choices[0].message.content
+            # Simple research agent doesn't inherit from BaseAgent, so use direct API call
+            # But follow the Responses API pattern from settings
+            if settings.use_responses_api:
+                response = self.client.responses.create(
+                    model=model,
+                    input=full_prompt,
+                    reasoning={"effort": "medium"},
+                    text={"verbosity": "medium"}
+                )
+                execution_time = time.time() - start_time
+                content = response.output_text if hasattr(response, 'output_text') else ""
+                token_usage = getattr(response, 'token_usage', {})
+                
+                # Debug: Check response structure
+                print(f"DEBUG SIMPLE: Response attrs: {[attr for attr in dir(response) if not attr.startswith('_')]}")
+                print(f"DEBUG SIMPLE: Token usage: {token_usage}")
+                if hasattr(response, 'usage'):
+                    print(f"DEBUG SIMPLE: Usage attr: {response.usage}")
+            else:
+                # Fallback to Chat Completions
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": query}
+                    ],
+                    max_completion_tokens=1000
+                )
+                execution_time = time.time() - start_time
+                content = response.choices[0].message.content
+                token_usage = response.usage.model_dump() if response.usage else {}
             
             # Extract sources from the response
             sources = self._extract_sources(content)
@@ -102,9 +121,9 @@ class WebSearchAgent:
                 'citations': citations,
                 'execution_time': execution_time,
                 'token_usage': {
-                    'prompt_tokens': response.usage.prompt_tokens,
-                    'completion_tokens': response.usage.completion_tokens,
-                    'total_tokens': response.usage.total_tokens
+                    'prompt_tokens': token_usage.get('prompt_tokens', 0),
+                    'completion_tokens': token_usage.get('completion_tokens', 0),
+                    'total_tokens': token_usage.get('total_tokens', 0)
                 }
             }
             

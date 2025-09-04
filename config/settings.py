@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     use_responses_api: bool = Field(default=True)  # Use new Responses API
     
     # Phoenix Configuration
+    enable_phoenix_integration: bool = Field(default_factory=lambda: bool(os.getenv("PHOENIX_API_KEY")))  # Auto-disable if no API key
     phoenix_endpoint: str = Field(default="http://localhost:6006")
     phoenix_base_url: str = Field(default_factory=lambda: os.getenv("PHOENIX_BASE_URL", "http://localhost:6006"))
     phoenix_api_key: Optional[str] = Field(default_factory=lambda: os.getenv("PHOENIX_API_KEY"))
@@ -66,5 +67,14 @@ class Settings(BaseSettings):
         "case_sensitive": False,
         "extra": "ignore"  # Ignore extra fields in .env
     }
+    
+    @property
+    def model_for_complexity(self):
+        """Model mapping for complexity levels (for legacy research_agent.py)"""
+        return {
+            ComplexityLevel.SIMPLE: self.gpt5_nano_model,
+            ComplexityLevel.MODERATE: self.gpt5_mini_model,
+            ComplexityLevel.COMPLEX: self.gpt5_regular_model
+        }
 
 settings = Settings()

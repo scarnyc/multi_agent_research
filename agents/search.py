@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from agents.base import BaseAgent
-from agents.models import Task, TaskResult, AgentMessage, Priority, Citation, SearchResults
+from agents.models import Task, TaskResult, AgentMessage, Priority, Citation, SearchResults, SearchResult
 from config.settings import settings, ModelType, ComplexityLevel, ReasoningEffort, Verbosity
 
 logger = logging.getLogger(__name__)
@@ -32,50 +32,34 @@ class SearchAgent(BaseAgent):
         
         search_prompt = self._build_search_prompt(query, current_info_required)
         
-        # Define the websearch tool
-        websearch_tool = {
-            "type": "function",
-            "function": {
-                "name": "web_search",
-                "description": "Search the web for current information",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query"
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return",
-                            "default": max_results
-                        }
-                    },
-                    "required": ["query"]
-                }
-            }
-        }
-        
         try:
-            # Call LLM with websearch tool
+            # Call LLM with WebSearchTool - only for search agent
             response = await self._call_llm(
                 input_text=search_prompt,
-                tools=[websearch_tool],
-                tool_choice="auto"
+                tools=[{"type": "web_search_preview"}]  # Use OpenAI's web search tool
             )
             
             # Extract search results from response
             search_results = self._parse_search_response(response)
             
-            # Rank results by relevance
-            ranked_results = await self._rank_by_relevance(search_results, query)
+            # Convert dict results to SearchResult objects first
+            search_result_objects = []
+            for r in search_results[:max_results]:
+                search_result_objects.append(SearchResult(
+                    title=r.get('title', 'No Title'),
+                    url=r.get('url', ''),
+                    snippet=r.get('snippet', ''),
+                    score=r.get('relevance_score', 0.5)
+                ))
+            
+            # Simple relevance sorting (by score)
+            search_result_objects.sort(key=lambda x: x.score, reverse=True)
             
             return SearchResults(
                 query=query,
-                results=ranked_results[:max_results],
-                total_found=len(search_results),
-                search_time=datetime.now(),
-                relevance_scores=[r.get('relevance_score', 0.5) for r in ranked_results[:max_results]]
+                results=search_result_objects,
+                total_results=len(search_results),
+                search_time=0.0  # TODO: Track actual search time
             )
             
         except Exception as e:
@@ -84,9 +68,8 @@ class SearchAgent(BaseAgent):
             return SearchResults(
                 query=query,
                 results=[],
-                total_found=0,
-                search_time=datetime.now(),
-                error=str(e)
+                total_results=0,
+                search_time=0.0
             )
     
     def _build_search_prompt(self, query: str, current_info_required: bool) -> str:
@@ -118,20 +101,8 @@ Execute the search and provide the most relevant results."""
                 # Chat Completions API format
                 response_text = response.choices[0].message.content if response.choices else ""
             
-            # Check for tool calls in the response
-            tool_calls = getattr(response.choices[0].message, 'tool_calls', []) if hasattr(response, 'choices') else []
-            
-            if tool_calls:
-                for tool_call in tool_calls:
-                    if tool_call.function.name == "web_search":
-                        # Parse search results from tool response
-                        try:
-                            search_data = json.loads(tool_call.function.arguments)
-                            # This would contain the actual search results
-                            # Format will depend on OpenAI's websearch tool implementation
-                            results.extend(self._extract_search_results(search_data))
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to parse tool call arguments: {tool_call.function.arguments}")
+            # The websearch tool provides results directly in the response text
+            # No tool calls needed - results are integrated into the response content
             
             # Fallback: try to extract URLs and snippets from response text
             if not results:
@@ -310,7 +281,7 @@ Provide a structured response with:
             
             return {
                 "content": extracted_content,
-                "sources": [r['url'] for r in search_results.results],
+                "sources": [r.url for r in search_results.results],
                 "source_count": len(search_results.results),
                 "extraction_time": datetime.now()
             }
@@ -329,11 +300,11 @@ Provide a structured response with:
         formatted = []
         for i, result in enumerate(search_results.results):
             formatted.append(f"Source {i+1}:")
-            formatted.append(f"Title: {result.get('title', 'No title')}")
-            formatted.append(f"URL: {result.get('url', 'No URL')}")
-            formatted.append(f"Type: {result.get('source_type', 'unknown')}")
-            formatted.append(f"Relevance: {result.get('relevance_score', 0):.2f}")
-            formatted.append(f"Content: {result.get('snippet', 'No content')}")
+            formatted.append(f"Title: {result.title}")
+            formatted.append(f"URL: {result.url}")
+            formatted.append(f"Type: {getattr(result, 'metadata', {}).get('source_type', 'web')}")
+            formatted.append(f"Relevance: {result.score:.2f}")
+            formatted.append(f"Content: {result.snippet}")
             formatted.append("-" * 50)
         
         return '\n'.join(formatted)
@@ -364,11 +335,10 @@ Provide a structured response with:
         citations = []
         for result in search_results.results:
             citation = Citation(
-                url=result.get('url', ''),
-                title=result.get('title', 'Unknown'),
-                source_type=result.get('source_type', 'general'),
-                relevance_score=result.get('relevance_score', 0.5),
-                accessed_date=datetime.now()
+                content=result.snippet,
+                url=result.url,
+                title=result.title,
+                credibility_score=result.score
             )
             citations.append(citation)
         
@@ -378,9 +348,9 @@ Provide a structured response with:
             "sources_consulted": len(search_results.results),
             "citations": citations,
             "search_quality": {
-                "total_found": search_results.total_found,
-                "avg_relevance": sum(r.get('relevance_score', 0) for r in search_results.results) / len(search_results.results) if search_results.results else 0,
-                "source_diversity": len(set(r.get('source_type') for r in search_results.results))
+                "total_found": search_results.total_results,
+                "avg_relevance": sum(r.score for r in search_results.results) / len(search_results.results) if search_results.results else 0,
+                "source_diversity": len(set('web' for r in search_results.results))  # Simplified for now
             }
         }
     

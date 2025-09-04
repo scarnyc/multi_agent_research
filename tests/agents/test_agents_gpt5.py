@@ -3,8 +3,15 @@
 Comprehensive test of OpenAI Agents SDK compatibility with GPT-5 models
 """
 import os
+import sys
+from pathlib import Path
+
+# Add project root to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.append(str(project_root))
+
 from openai import OpenAI
-from settings.settings import settings
+from config.settings import settings
 import time
 
 def test_direct_gpt5_calls():

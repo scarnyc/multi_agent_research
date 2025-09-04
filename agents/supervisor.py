@@ -222,48 +222,103 @@ class SupervisorAgent(BaseAgent):
     async def process_task(self, task: Task) -> Any:
         """Process a task as the supervisor."""
         
-        # Analyze complexity
-        complexity = await self.analyze_query_complexity(task.description)
-        logger.info(f"Query complexity: {complexity.value}")
-        
-        # Decompose into subtasks if complex
-        if complexity == ComplexityLevel.COMPLEX:
-            subtasks = await self.decompose_query(task.description)
-            self.active_tasks[task.id] = subtasks
+        try:
+            # Analyze complexity with fallback
+            try:
+                complexity = await self.analyze_query_complexity(task.description)
+                logger.info(f"Query complexity: {complexity.value}")
+            except Exception as e:
+                logger.warning(f"Complexity analysis failed, defaulting to MODERATE: {str(e)}")
+                complexity = ComplexityLevel.MODERATE
             
-            # Execute subtasks in parallel where possible
-            results = []
-            for subtask in subtasks:
-                # Determine which agent should handle this
-                agent_type = subtask.assigned_agent
-                
-                if agent_type in self.sub_agents:
-                    agent = self.sub_agents[agent_type]
-                    result = await self.delegate_task(subtask, agent)
-                    results.append(result)
-                else:
-                    logger.warning(f"No agent found for type: {agent_type}")
+            # Decompose into subtasks if complex
+            if complexity == ComplexityLevel.COMPLEX:
+                try:
+                    subtasks = await self.decompose_query(task.description)
+                    self.active_tasks[task.id] = subtasks
+                    
+                    # Execute subtasks with error handling
+                    results = []
+                    for subtask in subtasks:
+                        try:
+                            agent_type = subtask.assigned_agent
+                            
+                            if agent_type in self.sub_agents:
+                                agent = self.sub_agents[agent_type]
+                                result = await self.delegate_task(subtask, agent)
+                                if result.status == Status.COMPLETED:
+                                    results.append(result)
+                                else:
+                                    logger.warning(f"Subtask failed: {result.error}")
+                            else:
+                                logger.warning(f"No agent found for type: {agent_type}")
+                        except Exception as e:
+                            logger.error(f"Subtask execution failed: {str(e)}")
+                            continue
+                    
+                    # Aggregate results with fallback
+                    if results:
+                        final_response = await self.aggregate_responses(results)
+                        return final_response
+                    else:
+                        # Fallback: try simple processing instead
+                        logger.warning("Complex processing failed, falling back to simple mode")
+                        complexity = ComplexityLevel.MODERATE
+                        
+                except Exception as e:
+                    logger.error(f"Complex task processing failed: {str(e)}")
+                    complexity = ComplexityLevel.MODERATE  # Fallback
             
-            # Aggregate results
-            final_response = await self.aggregate_responses(results)
-            return final_response
-            
-        else:
-            # For simple/moderate queries, route to appropriate agent directly
+            # Simple/moderate processing with error handling
             if "search" in self.sub_agents:
-                agent = self.sub_agents["search"]
-                # Update agent's model based on complexity
-                agent.model_type = self.route_to_model(complexity)
-                result = await self.delegate_task(task, agent)
-                
-                return {
-                    "response": result.result,
-                    "citations": result.citations,
-                    "execution_time": result.execution_time,
-                    "model_used": result.model_used
-                }
+                try:
+                    agent = self.sub_agents["search"]
+                    # Update agent's model based on complexity
+                    agent.model_type = self.route_to_model(complexity)
+                    result = await self.delegate_task(task, agent)
+                    
+                    if result.status == Status.COMPLETED:
+                        return {
+                            "response": result.result,
+                            "citations": result.citations,
+                            "execution_time": result.execution_time,
+                            "model_used": result.model_used,
+                            "total_tokens": result.tokens_used.get('total_tokens', 0),
+                            "tokens_used": result.tokens_used
+                        }
+                    else:
+                        return {
+                            "response": f"Search agent failed: {result.error}",
+                            "citations": [],
+                            "execution_time": result.execution_time,
+                            "model_used": result.model_used,
+                            "total_tokens": result.tokens_used.get('total_tokens', 0),
+                            "tokens_used": result.tokens_used
+                        }
+                except Exception as e:
+                    logger.error(f"Search agent delegation failed: {str(e)}")
+                    return {
+                        "response": f"I apologize, but I encountered an error processing your request: {str(e)}",
+                        "citations": [],
+                        "execution_time": 0.0,
+                        "model_used": "error"
+                    }
             else:
-                return {"error": "No search agent available"}
+                return {
+                    "response": "I apologize, but the search functionality is currently unavailable.",
+                    "citations": [],
+                    "execution_time": 0.0,
+                    "model_used": "fallback"
+                }
+                
+        except Exception as e:
+            logger.error(f"Supervisor task processing failed: {str(e)}")
+            return {
+                "response": f"I encountered an unexpected error: {str(e)}",
+                "citations": [],
+                "execution_time": 0.0,
+                "model_used": "error"
+            }
     
     async def _process_critical_message(self, message: AgentMessage) -> None:
         """Handle critical priority messages immediately."""
