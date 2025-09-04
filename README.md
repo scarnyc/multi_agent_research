@@ -2,6 +2,53 @@
 
 A production-ready multi-agent research system with intelligent orchestration, task delegation, and comprehensive evaluation capabilities. Built with OpenAI's GPT-5 models and the new Responses API, designed for scalability, advanced reasoning, and reliability.
 
+## 🚀 Quick Start
+
+### Command Line Interface
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment
+cp .env.example .env
+# Edit .env to add your OPENAI_API_KEY
+
+# Simple research query
+python main.py simple "What is quantum computing?"
+
+# Complex multi-agent research
+python main.py multi "Analyze the impact of AI on healthcare in 2024"
+
+# Run evaluation suite
+python main.py eval
+
+# Setup Phoenix monitoring
+python main.py setup
+
+# Show help
+python main.py --help
+```
+
+### Python API
+```python
+# Simple research agent
+from agents.research_agent import ResearchAgent
+agent = ResearchAgent()
+result = agent.research("What is machine learning?")
+print(result.response)
+
+# Multi-agent system
+import asyncio
+from agents.multi_agents import initialize_system
+
+async def research():
+    system = initialize_system()
+    result = await system.process_query("Latest breakthroughs in AI")
+    print(result['response'])
+
+asyncio.run(research())
+```
+
 ## 🏗 Architecture Overview
 
 The system implements a **hierarchical multi-agent architecture** with intelligent orchestration:
@@ -183,10 +230,10 @@ We provide **two research agent approaches** for different use cases:
 
 | System | Use Case | Complexity | Setup Time |
 |--------|----------|------------|------------|
-| **research_agent.py** | Prototyping, simple queries | Simple | 30 seconds |
+| **agents/research_agent.py** | Prototyping, simple queries | Simple | 30 seconds |
 | **agents/multi_agents.py** | Production, complex research | Advanced | 2-3 minutes |
 
-## 🚀 Simple Research Agent (research_agent.py)
+## 🚀 Simple Research Agent (agents/research_agent.py)
 
 **Perfect for**: Quick prototyping, simple Q&A, educational purposes
 
@@ -594,7 +641,7 @@ The system integrates with Arize Phoenix for advanced observability and quality 
 
 #### 1. Automated Setup
 ```bash
-python setup_phoenix_mcp.py
+python evaluation/setup_phoenix_mcp.py
 ```
 
 This will:
@@ -870,7 +917,7 @@ curl http://localhost:8080/api/health
 curl http://localhost:6006/health
 
 # Restart Phoenix server
-python setup_phoenix_mcp.py
+python evaluation/setup_phoenix_mcp.py
 ```
 
 **2. MCP Tool Approval Errors**
@@ -993,9 +1040,9 @@ cache = redis.Redis(host='localhost', port=6379)
 
 ## 🔄 System Comparison & When to Use Each
 
-### research_agent.py vs agents/multi_agents.py
+### agents/research_agent.py vs agents/multi_agents.py
 
-| Aspect | research_agent.py | agents/multi_agents.py |
+| Aspect | agents/research_agent.py | agents/multi_agents.py |
 |--------|------------------|------------------|
 | **Architecture** | Single monolithic agent | Multi-agent with specialization |
 | **Complexity** | ~224 lines, simple | 1000+ lines, sophisticated |
@@ -1010,7 +1057,7 @@ cache = redis.Redis(host='localhost', port=6379)
 
 ### 🎯 Decision Guide
 
-**Choose research_agent.py when:**
+**Choose agents/research_agent.py when:**
 - ✅ Building prototypes or demos
 - ✅ Need fast, simple research capabilities  
 - ✅ Working with basic queries (< 20 words)
@@ -1027,7 +1074,7 @@ cache = redis.Redis(host='localhost', port=6379)
 
 ### 📈 Performance Characteristics
 
-| Metric | research_agent.py | agents/multi_agents.py |
+| Metric | agents/research_agent.py | agents/multi_agents.py |
 |--------|------------------|------------------|
 | **Startup Time** | < 1 second | 2-3 seconds |
 | **Simple Query** | 2-5 seconds | 3-7 seconds |

@@ -4,17 +4,17 @@ Comprehensive test of OpenAI Agents SDK compatibility with GPT-5 models
 """
 import os
 from openai import OpenAI
-from config.settings import settings
+from settings.settings import settings
 import time
 
 def test_direct_gpt5_calls():
     """Test GPT-5 models with direct OpenAI calls"""
-    client = OpenAI(api_key=config.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key)
     
     models_to_test = [
-        ("GPT-5 Nano", config.gpt5_nano_model),
-        ("GPT-5 Mini", config.gpt5_mini_model), 
-        ("GPT-5 Regular", config.gpt5_regular_model)
+        ("GPT-5 Nano", settings.gpt5_nano_model),
+        ("GPT-5 Mini", settings.gpt5_mini_model), 
+        ("GPT-5 Regular", settings.gpt5_regular_model)
     ]
     
     print("=" * 50)
@@ -42,7 +42,7 @@ def test_direct_gpt5_calls():
 
 def test_gpt5_with_web_search():
     """Test GPT-5 with web search functionality"""
-    client = OpenAI(api_key=config.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key)
     
     print("=" * 50)
     print("TESTING GPT-5 WITH WEB SEARCH")  
@@ -50,7 +50,7 @@ def test_gpt5_with_web_search():
     
     test_query = "What is the current weather in San Francisco?"
     
-    for model_name, model in [("GPT-5 Mini", config.gpt5_mini_model)]:
+    for model_name, model in [("GPT-5 Mini", settings.gpt5_mini_model)]:
         try:
             start_time = time.time()
             response = client.chat.completions.create(
@@ -102,10 +102,10 @@ def test_agents_sdk_compatibility():
             # This is speculative syntax - may need adjustment based on actual SDK
             agent = Agent(
                 name="test-agent",
-                model=config.gpt5_mini_model,
+                model=settings.gpt5_mini_model,
                 instructions="You are a helpful research assistant."
             )
-            print(f"✅ Agent created successfully with {config.gpt5_mini_model}")
+            print(f"✅ Agent created successfully with {settings.gpt5_mini_model}")
             
             # Test agent execution
             response = agent.run("What is 2+2?")
@@ -123,7 +123,7 @@ def test_agents_sdk_compatibility():
 
 def test_function_calling_with_gpt5():
     """Test if GPT-5 supports function calling (alternative to Agents SDK)"""
-    client = OpenAI(api_key=config.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key)
     
     print("=" * 50) 
     print("TESTING GPT-5 FUNCTION CALLING")
@@ -147,7 +147,7 @@ def test_function_calling_with_gpt5():
         }
     ]
     
-    for model_name, model in [("GPT-5 Mini", config.gpt5_mini_model)]:
+    for model_name, model in [("GPT-5 Mini", settings.gpt5_mini_model)]:
         try:
             start_time = time.time()
             response = client.chat.completions.create(
