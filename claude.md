@@ -320,8 +320,9 @@ MAX_RETRIES=3
 ### Current Project Structure
 ```
 multi-agent-research/
-├── research_agent.py           # ✅ Simple research agent (lightweight)
+├── main.py                     # ✅ CLI entry point for all functionality
 ├── agents/                     # ✅ Multi-agent system (production)
+│   ├── research_agent.py       # ✅ Simple research agent (lightweight)
 │   ├── __init__.py
 │   ├── base.py                # ✅ BaseAgent with Responses API integration
 │   ├── supervisor.py          # ✅ SupervisorAgent orchestration
@@ -334,6 +335,7 @@ multi-agent-research/
 │   ├── evaluation_dataset.py  # ✅ 40-query dataset with pandas/CSV export
 │   ├── agent_evaluation_notebook.ipynb  # ✅ Jupyter evaluation framework
 │   ├── phoenix_integration.py # ✅ Arize Phoenix integration
+│   ├── setup_phoenix_mcp.py   # ✅ Phoenix MCP server setup automation
 │   ├── test_suites.py         # Quality test implementations
 │   └── datasets/              # Evaluation data storage
 ├── api/                       # 📅 Planned - FastAPI backend
