@@ -22,7 +22,10 @@ python main.py multi "Analyze the impact of AI on healthcare in 2024"
 # Run evaluation suite
 python main.py eval
 
-# Setup Phoenix monitoring
+# Launch interactive Jupyter notebook for comprehensive evaluation
+python main.py notebook
+
+# Setup Phoenix monitoring  
 python main.py setup
 
 # Show help
@@ -598,9 +601,9 @@ print(f"Avg execution time: {stats['avg_execution_time']}s")
 print(f"Total tasks: {stats['total_tasks']}")
 ```
 
-## 🔍 Phoenix MCP Integration & Comprehensive Evaluation
+## 🔍 Phoenix Integration & Comprehensive Evaluation
 
-The system integrates with Arize Phoenix for advanced observability and quality analysis using the Model Context Protocol (MCP). This provides real-time monitoring, comprehensive evaluation frameworks, and automated quality testing.
+The system integrates with Arize Phoenix for advanced observability and quality analysis using direct SDK integration. This provides real-time monitoring, comprehensive evaluation frameworks, and automated quality testing.
 
 ### Architecture Overview
 
@@ -615,10 +618,10 @@ The system integrates with Arize Phoenix for advanced observability and quality 
 │  CitationAgent ───────┘                                     │
 └─────────────────────────────────────────────────────────────┘
                           │
-                          │ GPT-5 Responses API + MCP Tools
+                          │ OpenTelemetry Traces
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  Phoenix MCP Server                         │
+│                  Phoenix Direct SDK                         │
 ├─────────────────────────────────────────────────────────────┤
 │  • Trace & Span Management                                 │
 │  • Quality Analysis Tools                                  │
@@ -630,45 +633,43 @@ The system integrates with Arize Phoenix for advanced observability and quality 
 ┌─────────────────────────────────────────────────────────────┐
 │               Evaluation Framework                          │
 ├─────────────────────────────────────────────────────────────┤
+│  • Interactive Jupyter Notebook                           │
 │  • Automated Quality Tests                                 │
 │  • Performance Benchmarks                                  │
-│  • Dataset Evaluation                                      │
 │  • Real-time Monitoring                                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Quick Setup
 
-#### 1. Automated Setup
+#### 1. Start Phoenix Server
 ```bash
-python evaluation/setup_phoenix_mcp.py
+# Option 1: Local Phoenix server
+phoenix serve
+
+# Option 2: Use Phoenix cloud (set PHOENIX_API_KEY)
+export PHOENIX_API_KEY=your_key
 ```
 
-This will:
-- Check dependencies
-- Set up Phoenix server (local/Docker/remote)
-- Configure MCP integration
-- Test the integration
-- Create startup scripts
-
-#### 2. Start Monitoring Dashboard
+#### 2. Launch Interactive Evaluation Notebook
 ```bash
-# Start monitoring dashboard
-python -m evaluation.monitoring --port 8080
+# Launch comprehensive evaluation interface
+python main.py notebook
 
-# Dashboard available at: http://localhost:8080
+# Or use the dedicated launcher
+python launch_notebook.py
 ```
 
-#### 3. Run Evaluations
+#### 3. Run CLI Evaluations
 ```bash
-# Single query evaluation
-python -m evaluation.runner --query-id 1
+# Quick evaluation summary
+python main.py eval
 
-# Complexity-specific evaluation  
-python -m evaluation.runner --complexity simple
+# Test simple queries
+python main.py simple "What is machine learning?"
 
-# Full dataset evaluation
-python -m evaluation.runner --full --export-formats json csv
+# Test complex multi-agent queries
+python main.py multi "Analyze the impact of AI on healthcare"
 ```
 
 ### Configuration
@@ -678,13 +679,9 @@ Key configuration options in `.env`:
 
 ```env
 # Phoenix Configuration
-PHOENIX_BASE_URL=http://localhost:6006
+PHOENIX_ENDPOINT=http://localhost:6006
 PHOENIX_API_KEY=your_phoenix_api_key
-
-# Phoenix MCP Server Configuration
-PHOENIX_MCP_SERVER_URL=http://localhost:6006/mcp
-PHOENIX_MCP_REQUIRE_APPROVAL=never
-PHOENIX_MCP_SERVER_LABEL=phoenix
+PHOENIX_PROJECT_NAME=multi-agent-research
 
 # GPT-5 Configuration
 OPENAI_API_KEY=your_openai_api_key
@@ -710,62 +707,106 @@ result = await supervisor.orchestrate(query="Your query", trace_id="trace_123")
 
 ### Core Features
 
-#### Phoenix MCP Integration
-The `evaluation/phoenix_integration.py` module provides:
+#### Phoenix Direct SDK Integration
+The `evaluation/phoenix_integration.py` module provides direct SDK integration:
 
 ```python
-from evaluation.phoenix_integration import phoenix_integration
+from evaluation.phoenix_integration import PhoenixDirectIntegration
+from opentelemetry import trace
+
+# Initialize Phoenix
+phoenix = PhoenixDirectIntegration()
+tracer = trace.get_tracer(__name__)
 
 # Start evaluation session
-session_id = await phoenix_integration.start_evaluation_session("my_session")
+session_id = phoenix.start_evaluation_session("my_session")
 
-# Create traces and spans
-trace_id = await phoenix_integration.start_trace("evaluation_run")
-span_id = await phoenix_integration.create_span(
-    trace_id=trace_id,
-    span_name="agent_interaction",
-    span_type="llm"
-)
+# Create spans with context
+with tracer.start_as_current_span("agent_orchestration") as span:
+    span.set_attribute("query", "What is machine learning?")
+    span.set_attribute("agent_type", "supervisor")
+    
+    # Your agent logic here
+    result = await agent.process(query)
+    
+    span.set_attribute("response_length", len(result.response))
+    span.set_attribute("token_usage", result.token_usage.get('total_tokens', 0))
 
-# Log agent interactions
-await phoenix_integration.log_agent_interaction(
-    trace_id=trace_id,
-    agent_id="supervisor",
-    input_message="What is machine learning?",
-    output_message="Machine learning is...",
-    model_used="gpt-5-mini",
-    tokens_used={"total": 150, "prompt": 100, "completion": 50},
-    execution_time=2.5
-)
-
-# Analyze response quality
-quality_scores = await phoenix_integration.analyze_response_quality(
+# Quality metrics tracking
+phoenix.log_quality_metrics(
+    session_id=session_id,
     query="What is machine learning?",
     response="Machine learning is...",
-    citations=[...],
-    expected_sources=2
+    metrics={
+        "factual_accuracy": 0.95,
+        "citation_completeness": 1.0,
+        "response_relevance": 0.88
+    }
 )
 ```
 
-#### Evaluation Framework
-The `evaluation/framework.py` provides comprehensive evaluation:
+#### Interactive Jupyter Notebook Evaluation
+The comprehensive evaluation interface is available via Jupyter notebook:
 
 ```python
-from evaluation.framework import EvaluationFramework, initialize_framework
-from agents.supervisor import SupervisorAgent
+# Launch the evaluation notebook
+# python main.py notebook
 
-# Initialize
-supervisor = SupervisorAgent()
-framework = initialize_framework(supervisor, enable_phoenix=True)
+# Features available in the notebook:
+# - Interactive query testing
+# - Batch evaluation with progress tracking
+# - Real-time Phoenix trace visualization
+# - Performance metrics and charts
+# - Export capabilities (CSV, JSON)
+# - Custom evaluation parameters
 
-# Run evaluations
-session = await framework.create_session("test_run")
-result = await framework.evaluate_single_query(eval_query)
-full_session = await framework.evaluate_full_dataset()
+# Core evaluation functions used in the notebook:
+from agents.multi_agents import initialize_system
 
-# Export results
-json_export = framework.export_results(session, "json")
-csv_export = framework.export_results(session, "csv")
+system = initialize_system()
+results = await system.batch_process_queries(
+    queries=evaluation_queries,
+    max_concurrent=3,
+    phoenix_session="batch_eval_001"
+)
+```
+
+### 📊 Interactive Jupyter Notebook Interface
+
+The system includes a comprehensive Jupyter notebook for interactive evaluation and testing:
+
+#### Features
+- **Interactive Controls**: Widgets for configuring evaluation parameters
+- **Real-time Progress**: Live progress bars during evaluation
+- **Phoenix Integration**: Automatic trace creation and monitoring
+- **Visualization**: Charts and graphs for performance analysis
+- **Export Capabilities**: Save results in CSV, JSON formats
+- **Custom Testing**: Interactive query testing interface
+
+#### Launching the Notebook
+```bash
+# Option 1: Via main CLI
+python main.py notebook
+
+# Option 2: Direct launcher
+python launch_notebook.py
+
+# Option 3: Manual Jupyter launch
+cd evaluation
+jupyter notebook multi_agent_evaluation_notebook.ipynb
+```
+
+#### Key Notebook Sections
+1. **System Initialization**: Setup multi-agent system and Phoenix
+2. **Interactive Testing**: Test individual queries with immediate feedback
+3. **Batch Evaluation**: Run comprehensive evaluations with progress tracking
+4. **Performance Analysis**: Visualize results with interactive charts
+5. **Export Interface**: Save and download evaluation results
+
+#### Requirements
+All notebook dependencies are included in `requirements.txt`:
+```bash
+pip install jupyter ipywidgets matplotlib seaborn pandas notebook
 ```
 
 #### Quality Test Suites
@@ -790,7 +831,7 @@ summary = quality_test_suite.get_test_summary(test_results)
 ```
 
 Available quality tests:
-- **FactualAccuracyTest**: Verifies factual correctness using Phoenix MCP
+- **FactualAccuracyTest**: Verifies factual correctness using automated checks
 - **CitationCompletenessTest**: Ensures proper source attribution
 - **ResponseCoherenceTest**: Checks response structure and clarity
 - **SourceRelevanceTest**: Validates source relevance to query

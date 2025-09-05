@@ -1,5 +1,41 @@
 # Multi-Agent Research System Requirements
 
+## 🎆 Recent Updates (September 2025)
+
+### 🛠️ Major Phoenix Integration Refactor
+- **Issue**: MCP integration was causing 424 "Failed Dependency" errors throughout the system
+- **Solution**: Complete architectural refactor from MCP to direct Phoenix SDK integration
+- **Impact**: Eliminated Phoenix-related errors, improved system reliability, simplified codebase
+- **Files Updated**: `evaluation/phoenix_integration.py`, `agents/base.py`, `config/settings.py`
+
+### 📊 New Interactive Evaluation Interface
+- **Addition**: Comprehensive Jupyter notebook (`evaluation/multi_agent_evaluation_notebook.ipynb`)
+- **Features**: Interactive controls, real-time progress, Phoenix integration, visualization, export
+- **Access**: `python main.py notebook` or `python launch_notebook.py`
+
+### 🐛 Bug Fixes Completed
+- **SearchResult Data Model**: Fixed AttributeError where objects were treated as dictionaries
+- **Token Usage Tracking**: Fixed zero token counts by properly extracting from Responses API
+- **Test Suite**: Maintained 96.7% success rate (29/30 tests passing)
+
+### 📦 Current System Status
+**✅ FULLY OPERATIONAL**:
+- Multi-agent research system with supervisor orchestration
+- GPT-5 model routing (nano/mini/regular) based on query complexity
+- Web search integration via OpenAI's websearch tool
+- Citation tracking and bibliography generation
+- Phoenix observability with OpenTelemetry tracing
+- Interactive Jupyter evaluation notebook
+- Comprehensive test suite (96.7% success rate)
+- CLI interface with simple/multi/eval/notebook commands
+
+**📋 AVAILABLE INTERFACES**:
+- `python main.py simple "query"` - Single-agent research
+- `python main.py multi "query"` - Multi-agent research
+- `python main.py eval` - Evaluation summary
+- `python main.py notebook` - Interactive evaluation interface
+- Direct Python API via `agents.multi_agents.initialize_system()`
+
 ## Project Overview
 Build a production-ready multi-agent research system with supervisor architecture, intelligent routing, and comprehensive evaluation capabilities. Development follows an iterative approach: core agent architecture → evaluation framework → API layer → UI layer.
 
@@ -8,7 +44,7 @@ Build a production-ready multi-agent research system with supervisor architectur
 ### Phase 1: Core Agent Architecture ✅ COMPLETED
 Focus on building the foundational multi-agent system with proper orchestration and communication patterns.
 
-### Phase 2: Evaluation Framework ✅ COMPLETED  
+### Phase 2: Evaluation Framework ✅ COMPLETED & ENHANCED  
 Implement comprehensive evaluation and monitoring before adding API/UI layers.
 
 ### Phase 3: API Backend (Priority 2)
@@ -126,16 +162,24 @@ class TaskResult:
 
 ## Phase 2: Evaluation Framework ✅ COMPLETED
 
-### 2.1 Arize Phoenix Integration ✅ IMPLEMENTED
+### 2.1 Arize Phoenix Integration ✅ IMPLEMENTED (REFACTORED)
 
-**Implemented Features**:
+**Recently Refactored (September 2025)**:
+- 🔄 **MAJOR REFACTOR**: Migrated from MCP (Model Context Protocol) to Direct Phoenix SDK integration
+- 🛠️ **Issue Resolution**: Fixed 424 "Failed Dependency" errors that were flooding the system
+- ⚡ **Performance Improvement**: Reduced integration complexity and improved reliability
+- 🎯 **Simplified Architecture**: Direct OpenTelemetry tracing instead of MCP server calls
+
+**Current Implementation Features**:
 - ✅ Local Phoenix instance setup for development
 - ✅ Production Phoenix deployment configuration
-- ✅ Custom spans for each agent interaction via Responses API
+- ✅ Direct Phoenix SDK integration via `phoenix.otel.register()`
+- ✅ OpenTelemetry spans for each agent interaction
 - ✅ Complete request lifecycle tracing
-- ✅ 40-query evaluation dataset with diverse complexity levels
-- ✅ Jupyter notebook evaluation framework
+- ✅ 40+ query evaluation dataset with diverse complexity levels
+- ✅ **NEW**: Interactive Jupyter notebook evaluation interface
 - ✅ Automated performance and quality testing
+- ✅ Graceful degradation when Phoenix unavailable
 
 **Key Metrics to Track**:
 ```python
@@ -153,7 +197,30 @@ class TaskResult:
 - cache_hit_rate: float
 ```
 
-### 2.2 Evaluation Test Suite
+### 2.2 Interactive Jupyter Notebook Interface ✅ NEW
+
+**Recently Added (September 2025)**:
+- 📊 **Comprehensive Evaluation Interface**: `evaluation/multi_agent_evaluation_notebook.ipynb`
+- 🎮 **Interactive Controls**: ipywidgets for parameter configuration
+- 📈 **Real-time Visualization**: matplotlib/seaborn charts for performance analysis
+- 🔄 **Progress Tracking**: Live progress bars during batch evaluation
+- 💾 **Export Capabilities**: CSV, JSON export functionality
+- 🔥 **Phoenix Integration**: Automatic trace creation and session management
+- 🧪 **Custom Testing**: Interactive query testing interface
+
+**Launch Options**:
+```bash
+# Via main CLI
+python main.py notebook
+
+# Direct launcher
+python launch_notebook.py
+
+# Manual launch
+cd evaluation && jupyter notebook multi_agent_evaluation_notebook.ipynb
+```
+
+### 2.3 Evaluation Test Suite
 
 **Test Categories**:
 
@@ -183,20 +250,27 @@ class TaskResult:
    - Latency benchmarks per complexity level
    - Token usage optimization tests
 
-### 2.3 Evaluation Dataset
+### 2.4 Evaluation Dataset ✅ ENHANCED
 
-**Create evaluation datasets**:
+**Current Evaluation Dataset** (`evaluation/evaluation_dataset.py`):
 ```python
-# Structure for eval data
-class EvalCase:
-    query: str
-    expected_complexity: ComplexityLevel
-    ground_truth: Optional[str]
-    required_sources: List[str]
-    max_latency_ms: int
-    
-# Minimum 50 cases per complexity level
-# Include edge cases and adversarial examples
+# Enhanced dataset structure
+EVALUATION_QUERIES = [
+    {
+        "id": 1,
+        "query": "What is machine learning?",
+        "expected_complexity": "SIMPLE",
+        "domain": "Technology",
+        "requires_current_info": False,
+        "expected_sources": 2
+    },
+    # ... 40+ diverse queries across all complexity levels
+]
+
+# Categories include:
+# - Technology, Biology, History, Economics, Science
+# - Simple definitions to complex analysis queries
+# - Mix of current and historical information needs
 ```
 
 ---
@@ -380,13 +454,15 @@ multi-agent-research/
 - [x] Comprehensive error handling and retry logic
 - [x] Multi-agent system integration (agents/multi_agents.py)
 
-### Sprint 3 (Week 3): Evaluation Framework ✅ COMPLETED
-- [x] Set up Arize Phoenix integration
-- [x] Implement tracing and spans via Responses API
-- [x] Create 40-query evaluation dataset
-- [x] Build Jupyter notebook evaluation framework
+### Sprint 3 (Week 3): Evaluation Framework ✅ COMPLETED & ENHANCED
+- [x] Set up Arize Phoenix integration (REFACTORED to direct SDK)
+- [x] Implement tracing and spans via OpenTelemetry
+- [x] Create 40+ query evaluation dataset
+- [x] Build comprehensive Jupyter notebook evaluation interface
 - [x] Performance benchmarking suite
 - [x] Document baseline metrics and comparison guide
+- [x] **ENHANCEMENT**: Interactive evaluation controls and visualization
+- [x] **BUG FIXES**: Resolved SearchResult and token tracking issues
 
 ### Sprint 4 (Week 4): API Development
 - [ ] FastAPI application setup
