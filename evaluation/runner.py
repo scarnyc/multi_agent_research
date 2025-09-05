@@ -7,13 +7,17 @@ import asyncio
 import logging
 import argparse
 import json
+import sys
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 from agents.supervisor import SupervisorAgent
-from agents.models import ModelType
-from config.settings import settings, ComplexityLevel, ReasoningEffort, Verbosity
+from config.settings import settings, ComplexityLevel, ReasoningEffort, Verbosity, ModelType
 from evaluation.framework import EvaluationFramework, initialize_framework
 from evaluation.test_suites import quality_test_suite
 from evaluation.phoenix_integration import phoenix_integration

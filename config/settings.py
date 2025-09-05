@@ -40,16 +40,11 @@ class Settings(BaseSettings):
     default_verbosity: Verbosity = Field(default=Verbosity.MEDIUM)
     use_responses_api: bool = Field(default=True)  # Use new Responses API
     
-    # Phoenix Configuration
-    enable_phoenix_integration: bool = Field(default_factory=lambda: bool(os.getenv("PHOENIX_API_KEY")))  # Auto-disable if no API key
-    phoenix_endpoint: str = Field(default="http://localhost:6006")
-    phoenix_base_url: str = Field(default_factory=lambda: os.getenv("PHOENIX_BASE_URL", "http://localhost:6006"))
+    # Phoenix Direct SDK Configuration
+    enable_phoenix_integration: bool = Field(default_factory=lambda: bool(os.getenv("PHOENIX_API_KEY")))  # Auto-enable if API key present
+    phoenix_endpoint: str = Field(default_factory=lambda: os.getenv("PHOENIX_ENDPOINT", "http://localhost:6006"))
     phoenix_api_key: Optional[str] = Field(default_factory=lambda: os.getenv("PHOENIX_API_KEY"))
-    
-    # Phoenix MCP Server Configuration
-    phoenix_mcp_server_url: str = Field(default_factory=lambda: os.getenv("PHOENIX_MCP_SERVER_URL", "http://localhost:6006/mcp"))
-    phoenix_mcp_require_approval: str = Field(default_factory=lambda: os.getenv("PHOENIX_MCP_REQUIRE_APPROVAL", "never"))
-    phoenix_mcp_server_label: str = Field(default_factory=lambda: os.getenv("PHOENIX_MCP_SERVER_LABEL", "phoenix"))
+    phoenix_project_name: str = Field(default_factory=lambda: os.getenv("PHOENIX_PROJECT_NAME", "multi-agent-research"))
     
     # Application Settings
     max_concurrent_requests: int = Field(default=10)

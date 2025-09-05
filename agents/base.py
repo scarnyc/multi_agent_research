@@ -86,24 +86,15 @@ class BaseAgent(ABC):
         start_time = datetime.now()
         span_id = None
         
-        # Start Phoenix tracing if enabled
-        phoenix = get_phoenix_integration() if self.enable_phoenix_tracing else None
-        if phoenix and self._current_trace_id:
+        # Phoenix tracing handled via OpenTelemetry auto-instrumentation
+        # Simple span creation for additional context
+        span_id = None
+        if self.enable_phoenix_tracing:
             try:
-                span_id = await phoenix.create_span(
-                    trace_id=self._current_trace_id,
-                    span_name=f"{self.agent_id}_llm_call",
-                    span_type="llm",
-                    parent_span_id=self._current_span_id,
-                    metadata={
-                        "model": self._model_name,
-                        "reasoning_effort": self.reasoning_effort.value,
-                        "verbosity": self.verbosity.value,
-                        "input_length": len(input_text) if input_text else 0
-                    }
-                )
+                # Create span ID for tracking, actual tracing handled by OpenTelemetry
+                span_id = f"{self.agent_id}_llm_call_{datetime.now().timestamp()}"
             except Exception as e:
-                logger.warning(f"Failed to create Phoenix span: {e}")
+                logger.warning(f"Failed to create span context: {e}")
         
         try:
             if settings.use_responses_api and input_text:
@@ -119,7 +110,7 @@ class BaseAgent(ABC):
                 if self._previous_response_id:
                     kwargs["previous_response_id"] = self._previous_response_id
                 
-                # Skip Phoenix MCP tool integration due to API issues - Phoenix tracing still works via integration layer
+                # Phoenix integration now handled via OpenTelemetry auto-instrumentation
                 if tools is None:
                     tools = []
                 
@@ -134,15 +125,16 @@ class BaseAgent(ABC):
                 
                 # Extract response text and token usage
                 output_text = response.output_text if hasattr(response, 'output_text') else ""
-                token_usage = getattr(response, 'token_usage', {})
                 
-                # Debug: Log token usage to understand the structure
-                print(f"DEBUG: Response attributes: {dir(response)}")
-                print(f"DEBUG: Token usage from Responses API: {token_usage}")
-                if hasattr(response, 'usage'):
-                    print(f"DEBUG: Response usage: {response.usage}")
-                if not token_usage:
-                    print("DEBUG: No token usage data from Responses API")
+                # Extract token usage from Responses API
+                if hasattr(response, 'usage') and response.usage:
+                    token_usage = {
+                        'prompt_tokens': response.usage.input_tokens,
+                        'completion_tokens': response.usage.output_tokens,
+                        'total_tokens': response.usage.total_tokens
+                    }
+                else:
+                    token_usage = {}
                 
                 # Accumulate token usage for current task
                 for key in ['total_tokens', 'prompt_tokens', 'completion_tokens']:
@@ -151,36 +143,10 @@ class BaseAgent(ABC):
                 
                 execution_time = (datetime.now() - start_time).total_seconds()
                 
-                # Log to Phoenix if tracing enabled
-                if phoenix and span_id and self._current_trace_id:
-                    try:
-                        await phoenix.log_agent_interaction(
-                            trace_id=self._current_trace_id,
-                            agent_id=self.agent_id,
-                            input_message=input_text,
-                            output_message=output_text,
-                            model_used=self._model_name,
-                            tokens_used={
-                                "total": token_usage.get("total_tokens", 0),
-                                "prompt": token_usage.get("prompt_tokens", 0),
-                                "completion": token_usage.get("completion_tokens", 0)
-                            },
-                            execution_time=execution_time,
-                            parent_span_id=self._current_span_id
-                        )
-                        
-                        await phoenix.end_span(
-                            trace_id=self._current_trace_id,
-                            span_id=span_id,
-                            status="success",
-                            result=output_text,
-                            metrics={
-                                "tokens_total": token_usage.get("total_tokens", 0),
-                                "execution_time_ms": execution_time * 1000
-                            }
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to log to Phoenix: {e}")
+                # Phoenix tracing via OpenTelemetry auto-instrumentation handles LLM calls
+                # Additional metrics logged if span tracking enabled
+                if self.enable_phoenix_tracing and span_id:
+                    logger.debug(f"Span {span_id} completed: {execution_time:.2f}s, {token_usage.get('total_tokens', 0)} tokens")
                 
                 return response
             else:
@@ -207,41 +173,18 @@ class BaseAgent(ABC):
                     if key in token_usage:
                         self._current_task_tokens[key] = self._current_task_tokens.get(key, 0) + token_usage[key]
                 
-                # Log to Phoenix for Chat Completions API too
-                if phoenix and span_id and self._current_trace_id:
-                    try:
-                        execution_time = (datetime.now() - start_time).total_seconds()
-                        output_text = response.choices[0].message.content if response.choices else ""
-                        
-                        await phoenix.end_span(
-                            trace_id=self._current_trace_id,
-                            span_id=span_id,
-                            status="success",
-                            result=output_text,
-                            metrics={
-                                "tokens_total": token_usage.get("total_tokens", 0),
-                                "execution_time_ms": execution_time * 1000
-                            }
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to log to Phoenix: {e}")
+                # Phoenix tracing via OpenTelemetry auto-instrumentation for Chat Completions
+                if self.enable_phoenix_tracing and span_id:
+                    execution_time = (datetime.now() - start_time).total_seconds()
+                    logger.debug(f"Span {span_id} completed: {execution_time:.2f}s, {token_usage.get('total_tokens', 0)} tokens")
                 
                 return response
             
         except Exception as e:
-            # Log error to Phoenix if tracing enabled
-            if phoenix and span_id and self._current_trace_id:
-                try:
-                    execution_time = (datetime.now() - start_time).total_seconds()
-                    await phoenix.end_span(
-                        trace_id=self._current_trace_id,
-                        span_id=span_id,
-                        status="error",
-                        error=str(e),
-                        metrics={"execution_time_ms": execution_time * 1000}
-                    )
-                except Exception as phoenix_error:
-                    logger.warning(f"Failed to log error to Phoenix: {phoenix_error}")
+            # Phoenix error tracing via OpenTelemetry auto-instrumentation
+            if self.enable_phoenix_tracing and span_id:
+                execution_time = (datetime.now() - start_time).total_seconds()
+                logger.debug(f"Span {span_id} failed: {execution_time:.2f}s, error: {str(e)}")
             
             logger.error(f"Error calling LLM for agent {self.agent_id}: {str(e)}")
             raise
@@ -295,27 +238,11 @@ class BaseAgent(ABC):
         start_time = datetime.now()
         task_span_id = None
         
-        # Start Phoenix span for task execution
-        phoenix = get_phoenix_integration() if self.enable_phoenix_tracing else None
-        if phoenix and self._current_trace_id:
-            try:
-                task_span_id = await phoenix.create_span(
-                    trace_id=self._current_trace_id,
-                    span_name=f"{self.agent_id}_execute_task",
-                    span_type="task",
-                    parent_span_id=self._current_span_id,
-                    metadata={
-                        "task_id": task.id,
-                        "task_description": task.description[:200],  # Truncate for readability
-                        "agent_id": self.agent_id,
-                        "model": self._model_name
-                    }
-                )
-                # Update current span context for nested calls
-                original_span_id = self._current_span_id
-                self._current_span_id = task_span_id
-            except Exception as e:
-                logger.warning(f"Failed to create Phoenix task span: {e}")
+        # Task execution tracing via OpenTelemetry
+        task_span_id = None
+        if self.enable_phoenix_tracing:
+            task_span_id = f"{self.agent_id}_execute_task_{datetime.now().timestamp()}"
+            logger.debug(f"Starting task execution: {task.id} with span {task_span_id}")
         
         try:
             # Reset token tracking for this task
@@ -334,21 +261,9 @@ class BaseAgent(ABC):
                 tokens_used=self._current_task_tokens.copy()
             )
             
-            # End Phoenix span on success
-            if phoenix and task_span_id and self._current_trace_id:
-                try:
-                    await phoenix.end_span(
-                        trace_id=self._current_trace_id,
-                        span_id=task_span_id,
-                        status="success",
-                        result=str(result)[:500] if result else None,  # Truncate result
-                        metrics={
-                            "execution_time_ms": execution_time * 1000,
-                            "model_used": self._model_name
-                        }
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to end Phoenix task span: {e}")
+            # Task completion tracing via OpenTelemetry
+            if self.enable_phoenix_tracing and task_span_id:
+                logger.debug(f"Task {task.id} completed: {execution_time:.2f}s, {sum(self._current_task_tokens.values())} tokens")
             
             self.task_history.append(task_result)
             return task_result
@@ -367,29 +282,17 @@ class BaseAgent(ABC):
                 error=str(e)
             )
             
-            # End Phoenix span on error
-            if phoenix and task_span_id and self._current_trace_id:
-                try:
-                    await phoenix.end_span(
-                        trace_id=self._current_trace_id,
-                        span_id=task_span_id,
-                        status="error",
-                        error=str(e),
-                        metrics={
-                            "execution_time_ms": execution_time * 1000,
-                            "model_used": self._model_name
-                        }
-                    )
-                except Exception as phoenix_error:
-                    logger.warning(f"Failed to end Phoenix task span on error: {phoenix_error}")
+            # Task error tracing via OpenTelemetry
+            if self.enable_phoenix_tracing and task_span_id:
+                logger.debug(f"Task {task.id} failed: {execution_time:.2f}s, error: {str(e)}")
             
             self.task_history.append(task_result)
             logger.error(f"Agent {self.agent_id} failed to execute task {task.id}: {str(e)}")
             return task_result
         finally:
-            # Restore original span context
-            if phoenix and task_span_id:
-                self._current_span_id = original_span_id if 'original_span_id' in locals() else None
+            # Task cleanup
+            if task_span_id:
+                logger.debug(f"Task span {task_span_id} cleanup completed")
     
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about this agent's performance."""

@@ -90,13 +90,16 @@ class WebSearchAgent:
                 )
                 execution_time = time.time() - start_time
                 content = response.output_text if hasattr(response, 'output_text') else ""
-                token_usage = getattr(response, 'token_usage', {})
                 
-                # Debug: Check response structure
-                print(f"DEBUG SIMPLE: Response attrs: {[attr for attr in dir(response) if not attr.startswith('_')]}")
-                print(f"DEBUG SIMPLE: Token usage: {token_usage}")
-                if hasattr(response, 'usage'):
-                    print(f"DEBUG SIMPLE: Usage attr: {response.usage}")
+                # Extract token usage from Responses API
+                if hasattr(response, 'usage') and response.usage:
+                    token_usage = {
+                        'prompt_tokens': response.usage.input_tokens,
+                        'completion_tokens': response.usage.output_tokens,
+                        'total_tokens': response.usage.total_tokens
+                    }
+                else:
+                    token_usage = {}
             else:
                 # Fallback to Chat Completions
                 response = self.client.chat.completions.create(
