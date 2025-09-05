@@ -6,7 +6,7 @@ from datetime import datetime
 
 from agents.base import BaseAgent
 from agents.models import Task, TaskResult, AgentMessage, Priority, Citation, SearchResults, SearchResult
-from config.settings import settings, ModelType, ComplexityLevel, ReasoningEffort, Verbosity
+from config.settings import settings, ModelType, ReasoningEffort, Verbosity
 
 logger = logging.getLogger(__name__)
 
@@ -313,13 +313,23 @@ Provide a structured response with:
         """Process a search task."""
         logger.info(f"SearchAgent processing task: {task.id}")
         
+        # Select appropriate model for this query
+        selected_model = self._select_model_for_query(task.description)
+        if selected_model != self.model_type:
+            logger.info(f"Switching from {self.model_type.value} to {selected_model.value} for this query")
+            self.model_type = selected_model
+        
         # Determine if current information is needed
         current_info_needed = any(keyword in task.description.lower() 
                                 for keyword in ['current', 'recent', 'latest', '2024', '2025', 'now'])
         
-        # Determine complexity and adjust search parameters
-        complexity = await self._analyze_search_complexity(task.description)
-        max_results = 3 if complexity == "simple" else 5 if complexity == "moderate" else 8
+        # Determine search parameters based on model selection
+        if selected_model == ModelType.GPT5_NANO:
+            max_results = 3  # Simple searches need fewer results
+        elif selected_model == ModelType.GPT5_MINI:
+            max_results = 5  # Moderate searches need more sources
+        else:
+            max_results = 8  # Complex analysis needs comprehensive sources
         
         # Execute search
         search_results = await self.search(
@@ -354,19 +364,20 @@ Provide a structured response with:
             }
         }
     
-    async def _analyze_search_complexity(self, query: str) -> str:
-        """Analyze the complexity of a search query."""
-        # Simple heuristics for search complexity
+    def _select_model_for_query(self, query: str) -> ModelType:
+        """Select the most appropriate model based on query characteristics."""
         word_count = len(query.split())
-        has_multiple_concepts = any(word in query.lower() for word in ['and', 'vs', 'versus', 'compare', 'different'])
+        has_multiple_concepts = any(word in query.lower() for word in ['and', 'vs', 'versus', 'compare', 'different', 'analyze'])
+        has_complex_reasoning = any(word in query.lower() for word in ['implications', 'impact', 'trends', 'effectiveness', 'relationship'])
         has_recent_requirement = any(word in query.lower() for word in ['latest', 'recent', 'current', '2024', '2025'])
         
-        if word_count <= 5 and not has_multiple_concepts:
-            return "simple"
-        elif word_count <= 15 or has_recent_requirement:
-            return "moderate"
+        # More sophisticated model selection based on query characteristics
+        if has_complex_reasoning or (has_multiple_concepts and word_count > 15):
+            return ModelType.GPT5_REGULAR  # Complex analysis requires full model
+        elif has_multiple_concepts or word_count > 8 or has_recent_requirement:
+            return ModelType.GPT5_MINI  # Multi-step reasoning or recent info needs mini
         else:
-            return "complex"
+            return ModelType.GPT5_NANO  # Simple factual searches can use nano
     
     async def _process_critical_message(self, message: AgentMessage) -> None:
         """Handle critical priority messages."""

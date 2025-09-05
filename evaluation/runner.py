@@ -17,11 +17,11 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from agents.supervisor import SupervisorAgent
-from config.settings import settings, ComplexityLevel, ReasoningEffort, Verbosity, ModelType
+from config.settings import settings, TaskType, ReasoningEffort, Verbosity, ModelType
 from evaluation.framework import EvaluationFramework, initialize_framework
 from evaluation.test_suites import quality_test_suite
 from evaluation.phoenix_integration import phoenix_integration
-from evaluation_dataset import EVALUATION_QUERIES, get_queries_by_complexity
+from evaluation_dataset import EVALUATION_QUERIES, get_queries_by_task_type
 
 # Configure logging
 logging.basicConfig(
@@ -166,7 +166,7 @@ class EvaluationRunner:
         return evaluation_result
     
     async def run_complexity_evaluation(self,
-                                      complexity: ComplexityLevel,
+                                      complexity: TaskType,
                                       max_queries: int = None,
                                       save_results: bool = True,
                                       run_quality_tests: bool = True) -> Dict[str, Any]:
@@ -344,7 +344,7 @@ class EvaluationRunner:
         }
         
         # Add breakdown by complexity
-        for complexity in ComplexityLevel:
+        for complexity in TaskType:
             complexity_results = [r for r in session.results if r.expected_complexity == complexity]
             complexity_successful = [r for r in complexity_results if r.success]
             
@@ -435,9 +435,9 @@ async def main():
         elif args.complexity:
             # Complexity-specific evaluation
             complexity_map = {
-                "simple": ComplexityLevel.SIMPLE,
-                "moderate": ComplexityLevel.MODERATE,
-                "complex": ComplexityLevel.COMPLEX
+                "simple": TaskType.DIRECT_ANSWER,
+                "moderate": TaskType.SEARCH_NEEDED,
+                "complex": TaskType.RESEARCH_REPORT
             }
             
             result = await runner.run_complexity_evaluation(

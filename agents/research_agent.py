@@ -7,7 +7,7 @@ import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from openai import OpenAI
-from config.settings import settings, ComplexityLevel
+from config.settings import settings, TaskType
 from pydantic import BaseModel
 
 @dataclass
@@ -17,42 +17,52 @@ class ResearchResult:
     response: str
     sources: List[str]
     model_used: str
-    complexity_detected: ComplexityLevel
+    task_type_detected: TaskType
     execution_time: float
     token_usage: Dict[str, int]
     citations: List[str]
 
-class ComplexityAnalyzer:
-    """Analyzes query complexity for model routing"""
+class TaskTypeAnalyzer:
+    """Analyzes query to determine what type of response is needed"""
     
     def __init__(self):
-        # Keywords that indicate complexity levels
-        self.complex_keywords = [
+        # Keywords that indicate different task types
+        self.research_report_keywords = [
             'analyze', 'compare', 'evaluate', 'examine', 'implications', 
-            'trends', 'impact', 'relationship', 'effectiveness', 'strategies'
+            'trends', 'impact', 'relationship', 'effectiveness', 'strategies',
+            'comprehensive', 'in-depth', 'detailed analysis'
         ]
         
-        self.moderate_keywords = [
-            'differences', 'how', 'why', 'pros and cons', 'advantages',
-            'disadvantages', 'benefits', 'explain', 'factors'
+        self.search_needed_keywords = [
+            'latest', 'recent', 'current', 'news', 'updates', 'new',
+            '2024', '2025', 'now', 'today', 'this year', 'breaking'
+        ]
+        
+        self.direct_answer_keywords = [
+            'what is', 'define', 'definition', 'meaning', 'explain simply',
+            'calculate', 'formula', 'basic', 'simple explanation'
         ]
     
-    def analyze_complexity(self, query: str) -> ComplexityLevel:
-        """Determine complexity level of a research query"""
+    def analyze_task_type(self, query: str) -> TaskType:
+        """Determine what type of response the user needs"""
         query_lower = query.lower()
         word_count = len(query.split())
         
-        # Check for complex analysis keywords
-        complex_matches = sum(1 for keyword in self.complex_keywords if keyword in query_lower)
-        moderate_matches = sum(1 for keyword in self.moderate_keywords if keyword in query_lower)
+        # Check for different patterns
+        research_matches = sum(1 for keyword in self.research_report_keywords if keyword in query_lower)
+        search_matches = sum(1 for keyword in self.search_needed_keywords if keyword in query_lower)
+        direct_matches = sum(1 for keyword in self.direct_answer_keywords if keyword in query_lower)
         
-        # Rules for complexity classification
-        if complex_matches >= 2 or word_count > 15:
-            return ComplexityLevel.COMPLEX
-        elif complex_matches >= 1 or moderate_matches >= 2 or word_count > 8:
-            return ComplexityLevel.MODERATE
+        # Rules for task type classification
+        if research_matches >= 1 or word_count > 20:
+            return TaskType.RESEARCH_REPORT
+        elif search_matches >= 1:
+            return TaskType.SEARCH_NEEDED
+        elif direct_matches >= 1 or (word_count <= 8 and '?' in query):
+            return TaskType.DIRECT_ANSWER
         else:
-            return ComplexityLevel.SIMPLE
+            # Default to search for unclear cases
+            return TaskType.SEARCH_NEEDED
 
 class WebSearchAgent:
     """Agent that performs web searches using GPT-5"""
@@ -176,18 +186,25 @@ class ResearchAgent:
     
     def __init__(self):
         self.client = OpenAI(api_key=settings.openai_api_key)
-        self.complexity_analyzer = ComplexityAnalyzer()
+        self.task_type_analyzer = TaskTypeAnalyzer()
         self.search_agent = WebSearchAgent(self.client)
     
-    def research(self, query: str, complexity_override: Optional[ComplexityLevel] = None) -> ResearchResult:
+    def research(self, query: str, task_type_override: Optional[TaskType] = None) -> ResearchResult:
         """Perform research with intelligent model routing"""
         
-        # Determine complexity and select model
-        complexity = complexity_override or self.complexity_analyzer.analyze_complexity(query)
-        model = settings.model_for_complexity[complexity]
+        # Determine task type and select model
+        task_type = task_type_override or self.task_type_analyzer.analyze_task_type(query)
+        
+        # Simple model selection based on task type
+        if task_type == TaskType.DIRECT_ANSWER:
+            model = settings.gpt5_nano_model  # Fast for simple facts
+        elif task_type == TaskType.SEARCH_NEEDED:
+            model = settings.gpt5_mini_model  # Good for search and synthesis
+        else:  # RESEARCH_REPORT
+            model = settings.gpt5_regular_model  # Full power for analysis
         
         print(f"Query: {query}")
-        print(f"Detected complexity: {complexity.value} → Using model: {model}")
+        print(f"Detected task type: {task_type.value} → Using model: {model}")
         
         # Perform research using the selected model
         search_results = self.search_agent.search_and_synthesize(query, model)
@@ -197,7 +214,7 @@ class ResearchAgent:
             response=search_results['content'],
             sources=search_results['sources'],
             model_used=model,
-            complexity_detected=complexity,
+            task_type_detected=task_type,
             execution_time=search_results['execution_time'],
             token_usage=search_results['token_usage'],
             citations=search_results['citations']

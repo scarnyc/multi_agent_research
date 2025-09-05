@@ -124,13 +124,21 @@ class TestBaseAgent:
     
     @pytest.mark.asyncio
     async def test_call_llm_retry(self, agent):
-        # Test with Responses API
+        # Test with Responses API retry behavior
         with patch.object(agent.client, 'responses', create=True) as mock_responses:
-            mock_responses.create = AsyncMock()
-            mock_responses.create.side_effect = [
+            # First call fails, second succeeds
+            mock_success = Mock()
+            mock_success.output_text = "Success"
+            mock_success.id = "response_123"
+            mock_success.usage = Mock()
+            mock_success.usage.input_tokens = 10
+            mock_success.usage.output_tokens = 15
+            mock_success.usage.total_tokens = 25
+            
+            mock_responses.create = AsyncMock(side_effect=[
                 Exception("API Error"),
-                Mock(output_text="Success", id="response_123")
-            ]
+                mock_success
+            ])
             
             response = await agent._call_llm(input_text="test")
             assert response.output_text == "Success"

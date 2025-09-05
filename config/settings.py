@@ -7,10 +7,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-class ComplexityLevel(Enum):
-    SIMPLE = "gpt-5-nano"       # Factual queries, definitions, simple lookups
-    MODERATE = "gpt-5-mini"     # Multi-step reasoning, synthesis of 2-3 sources  
-    COMPLEX = "gpt-5"           # Deep analysis, multiple domains, creative tasks
+class TaskType(Enum):
+    DIRECT_ANSWER = "direct_answer"     # Factual questions that can be answered from training
+    SEARCH_NEEDED = "search_needed"     # Questions requiring current/real-time information
+    RESEARCH_REPORT = "research_report" # Deep analysis requiring comprehensive research
 
 class ModelType(Enum):
     GPT5_NANO = "gpt-5-nano"
@@ -64,12 +64,12 @@ class Settings(BaseSettings):
     }
     
     @property
-    def model_for_complexity(self):
-        """Model mapping for complexity levels (for legacy research_agent.py)"""
+    def model_mapping(self):
+        """Model mapping for different use cases"""
         return {
-            ComplexityLevel.SIMPLE: self.gpt5_nano_model,
-            ComplexityLevel.MODERATE: self.gpt5_mini_model,
-            ComplexityLevel.COMPLEX: self.gpt5_regular_model
+            ModelType.GPT5_NANO: self.gpt5_nano_model,
+            ModelType.GPT5_MINI: self.gpt5_mini_model,
+            ModelType.GPT5_REGULAR: self.gpt5_regular_model
         }
 
 settings = Settings()

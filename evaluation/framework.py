@@ -14,9 +14,9 @@ from uuid import uuid4
 
 from agents.supervisor import SupervisorAgent
 from agents.models import Citation
-from evaluation_dataset import EVALUATION_QUERIES, EvalQuery, get_queries_by_complexity
+from evaluation_dataset import EVALUATION_QUERIES, EvalQuery, get_queries_by_task_type
 from evaluation.phoenix_integration import phoenix_integration
-from config.settings import settings, ComplexityLevel
+from config.settings import settings, TaskType
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +25,8 @@ class EvaluationResult:
     """Result of evaluating a single query."""
     query_id: int
     query_text: str
-    expected_complexity: ComplexityLevel
-    actual_complexity: ComplexityLevel
+    expected_complexity: TaskType
+    actual_complexity: TaskType
     response: str
     citations: List[Citation]
     execution_time: float
@@ -238,10 +238,10 @@ class EvaluationFramework:
             )
     
     async def evaluate_complexity_level(self, 
-                                      complexity: ComplexityLevel,
+                                      complexity: TaskType,
                                       max_queries: int = None) -> List[EvaluationResult]:
         """Evaluate all queries of a specific complexity level."""
-        queries = get_queries_by_complexity(complexity)
+        queries = get_queries_by_task_type(complexity)
         
         if max_queries:
             queries = queries[:max_queries]
@@ -318,7 +318,7 @@ class EvaluationFramework:
         all_results = []
         
         # Evaluate each complexity level
-        for complexity in ComplexityLevel:
+        for complexity in TaskType:
             logger.info(f"Starting evaluation for complexity: {complexity.value}")
             
             complexity_results = await self.evaluate_complexity_level(
@@ -343,17 +343,17 @@ class EvaluationFramework:
         
         return session
     
-    def _determine_actual_complexity(self, orchestration_result: Dict[str, Any]) -> ComplexityLevel:
+    def _determine_actual_complexity(self, orchestration_result: Dict[str, Any]) -> TaskType:
         """Determine the actual complexity based on orchestration result."""
         # This is a simple heuristic - in practice, the supervisor would track this
         model_used = orchestration_result.get("model_used", "")
         
         if "nano" in model_used.lower():
-            return ComplexityLevel.SIMPLE
+            return TaskType.DIRECT_ANSWER
         elif "mini" in model_used.lower():
-            return ComplexityLevel.MODERATE
+            return TaskType.SEARCH_NEEDED
         else:
-            return ComplexityLevel.COMPLEX
+            return TaskType.RESEARCH_REPORT
     
     def _calculate_summary_metrics(self, results: List[EvaluationResult]) -> Dict[str, Any]:
         """Calculate summary metrics for evaluation results."""
@@ -389,7 +389,7 @@ class EvaluationFramework:
             metrics["avg_source_relevance"] = statistics.mean([r.source_relevance for r in quality_results])
         
         # Breakdown by complexity
-        for complexity in ComplexityLevel:
+        for complexity in TaskType:
             complexity_results = [r for r in results if r.expected_complexity == complexity]
             complexity_successful = [r for r in complexity_results if r.success]
             

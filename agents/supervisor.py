@@ -9,7 +9,7 @@ from agents.models import (
     AgentMessage, Task, TaskResult, Status, Priority,
     Citation, SearchResults
 )
-from config.settings import settings, ComplexityLevel, ModelType, ReasoningEffort, Verbosity
+from config.settings import settings, TaskType, ModelType, ReasoningEffort, Verbosity
 
 logger = logging.getLogger(__name__)
 
@@ -34,17 +34,23 @@ class SupervisorAgent(BaseAgent):
         self.sub_agents[agent.agent_id] = agent
         logger.info(f"Registered agent: {agent.agent_id}")
     
-    async def analyze_query_complexity(self, query: str) -> ComplexityLevel:
-        """Analyze the complexity of a user query to determine routing."""
+    async def analyze_task_type(self, query: str) -> TaskType:
+        """Analyze a user query to determine what type of response is needed."""
         
-        prompt = f"""Analyze the complexity of the given query and classify it as:
-        - SIMPLE: Factual queries, definitions, simple lookups (< 100 tokens, single concept)
-        - MODERATE: Multi-step reasoning, synthesis of 2-3 sources (< 500 tokens, 2-3 concepts)
-        - COMPLEX: Deep analysis, multiple domains, creative tasks (> 500 tokens or multiple domains)
-        
-        Query: {query}
-        
-        Respond with only: SIMPLE, MODERATE, or COMPLEX"""
+        prompt = f"""Analyze the user's query and classify what type of response they need:
+
+- DIRECT_ANSWER: Factual questions that can be answered from training data (definitions, established facts, mathematical calculations, historical dates, etc.)
+- SEARCH_NEEDED: Questions requiring current/recent information, news, trends, or real-time data  
+- RESEARCH_REPORT: Requests for comprehensive analysis, comparisons, or in-depth reports requiring multiple sources
+
+Query: {query}
+
+Examples:
+- "What is photosynthesis?" → DIRECT_ANSWER
+- "What's the latest news about AI regulation?" → SEARCH_NEEDED  
+- "Analyze the impact of climate change on agriculture" → RESEARCH_REPORT
+
+Respond with only: DIRECT_ANSWER, SEARCH_NEEDED, or RESEARCH_REPORT"""
         
         try:
             # Use minimal reasoning for this classification task
@@ -56,39 +62,79 @@ class SupervisorAgent(BaseAgent):
             # Restore original reasoning effort
             self.reasoning_effort = original_effort
             
-            # Extract complexity from response
-            complexity_str = response.output_text.strip().upper() if hasattr(response, 'output_text') else response.choices[0].message.content.strip().upper()
+            # Extract task type from response
+            task_type_str = response.output_text.strip().upper() if hasattr(response, 'output_text') else response.choices[0].message.content.strip().upper()
             
-            # Map to ComplexityLevel enum
-            if complexity_str == "SIMPLE":
-                return ComplexityLevel.SIMPLE
-            elif complexity_str == "MODERATE":
-                return ComplexityLevel.MODERATE
+            # Map to TaskType enum
+            if task_type_str == "DIRECT_ANSWER":
+                return TaskType.DIRECT_ANSWER
+            elif task_type_str == "SEARCH_NEEDED":
+                return TaskType.SEARCH_NEEDED
+            elif task_type_str == "RESEARCH_REPORT":
+                return TaskType.RESEARCH_REPORT
             else:
-                return ComplexityLevel.COMPLEX
+                # Default to search if unclear
+                return TaskType.SEARCH_NEEDED
                 
         except Exception as e:
-            logger.error(f"Error analyzing query complexity: {str(e)}")
-            # Default to MODERATE on error
-            return ComplexityLevel.MODERATE
+            logger.error(f"Error analyzing task type: {str(e)}")
+            # Default to search on error
+            return TaskType.SEARCH_NEEDED
     
-    def route_to_model(self, complexity: ComplexityLevel) -> ModelType:
-        """Route to appropriate model based on complexity."""
-        if complexity == ComplexityLevel.SIMPLE:
-            return ModelType.GPT5_NANO
-        elif complexity == ComplexityLevel.MODERATE:
-            return ModelType.GPT5_MINI
-        else:
-            return ModelType.GPT5_REGULAR
     
-    def get_reasoning_effort(self, complexity: ComplexityLevel) -> ReasoningEffort:
-        """Determine reasoning effort based on complexity."""
-        if complexity == ComplexityLevel.SIMPLE:
-            return ReasoningEffort.MINIMAL
-        elif complexity == ComplexityLevel.MODERATE:
-            return ReasoningEffort.LOW
-        else:
-            return ReasoningEffort.MEDIUM  # or HIGH for very complex tasks
+    def get_reasoning_effort(self, task_type: TaskType) -> ReasoningEffort:
+        """Determine reasoning effort based on task type."""
+        if task_type == TaskType.DIRECT_ANSWER:
+            return ReasoningEffort.LOW  # Simple factual answers
+        elif task_type == TaskType.SEARCH_NEEDED:
+            return ReasoningEffort.MEDIUM  # Need good search and synthesis
+        else:  # RESEARCH_REPORT
+            return ReasoningEffort.HIGH  # Complex analysis requires thorough reasoning
+    
+    async def _handle_direct_answer(self, task: Task) -> Dict[str, Any]:
+        """Handle direct answer tasks where supervisor can respond from training data."""
+        
+        prompt = f"""You are a knowledgeable assistant. The user is asking a factual question that can be answered from your training data. Provide a comprehensive, accurate answer.
+
+Question: {task.description}
+
+Provide a clear, factual response. If you're uncertain about any details, say so. Do not search for additional information - use only your training knowledge."""
+        
+        try:
+            # Set appropriate reasoning effort for direct answers
+            original_effort = self.reasoning_effort
+            self.reasoning_effort = self.get_reasoning_effort(TaskType.DIRECT_ANSWER)
+            
+            response = await self._call_llm(input_text=prompt)
+            
+            # Restore original reasoning effort
+            self.reasoning_effort = original_effort
+            
+            answer = response.output_text if hasattr(response, 'output_text') else response.choices[0].message.content
+            
+            return {
+                "response": answer,
+                "citations": [],  # No external sources for direct answers
+                "execution_time": 0.0,  # Would need to track this properly
+                "model_used": self._model_name,
+                "total_tokens": response.usage.total_tokens if hasattr(response, 'usage') and response.usage else 0,
+                "tokens_used": {
+                    "input_tokens": response.usage.input_tokens if hasattr(response, 'usage') and response.usage else 0,
+                    "output_tokens": response.usage.output_tokens if hasattr(response, 'usage') and response.usage else 0,
+                    "total_tokens": response.usage.total_tokens if hasattr(response, 'usage') and response.usage else 0
+                },
+                "task_type": TaskType.DIRECT_ANSWER.value
+            }
+            
+        except Exception as e:
+            logger.error(f"Direct answer handling failed: {str(e)}")
+            return {
+                "response": f"I apologize, but I encountered an error while answering your question: {str(e)}",
+                "citations": [],
+                "execution_time": 0.0,
+                "model_used": "error",
+                "task_type": TaskType.DIRECT_ANSWER.value
+            }
     
     async def decompose_query(self, query: str) -> List[Task]:
         """Decompose a complex query into subtasks."""
@@ -223,16 +269,21 @@ class SupervisorAgent(BaseAgent):
         """Process a task as the supervisor."""
         
         try:
-            # Analyze complexity with fallback
+            # Analyze task type with fallback
             try:
-                complexity = await self.analyze_query_complexity(task.description)
-                logger.info(f"Query complexity: {complexity.value}")
+                task_type = await self.analyze_task_type(task.description)
+                logger.info(f"Task type: {task_type.value}")
             except Exception as e:
-                logger.warning(f"Complexity analysis failed, defaulting to MODERATE: {str(e)}")
-                complexity = ComplexityLevel.MODERATE
+                logger.warning(f"Task type analysis failed, defaulting to SEARCH_NEEDED: {str(e)}")
+                task_type = TaskType.SEARCH_NEEDED
             
-            # Decompose into subtasks if complex
-            if complexity == ComplexityLevel.COMPLEX:
+            # Handle different task types
+            if task_type == TaskType.DIRECT_ANSWER:
+                # Supervisor handles directly
+                return await self._handle_direct_answer(task)
+            
+            elif task_type == TaskType.RESEARCH_REPORT:
+                # Complex research workflow
                 try:
                     subtasks = await self.decompose_query(task.description)
                     self.active_tasks[task.id] = subtasks
@@ -261,20 +312,19 @@ class SupervisorAgent(BaseAgent):
                         final_response = await self.aggregate_responses(results)
                         return final_response
                     else:
-                        # Fallback: try simple processing instead
-                        logger.warning("Complex processing failed, falling back to simple mode")
-                        complexity = ComplexityLevel.MODERATE
+                        # Fallback: try search instead
+                        logger.warning("Research report processing failed, falling back to search")
+                        task_type = TaskType.SEARCH_NEEDED
                         
                 except Exception as e:
-                    logger.error(f"Complex task processing failed: {str(e)}")
-                    complexity = ComplexityLevel.MODERATE  # Fallback
+                    logger.error(f"Research report processing failed: {str(e)}")
+                    task_type = TaskType.SEARCH_NEEDED  # Fallback
             
-            # Simple/moderate processing with error handling
-            if "search" in self.sub_agents:
+            # SEARCH_NEEDED processing (fallback for failed research reports too)
+            if task_type == TaskType.SEARCH_NEEDED and "search" in self.sub_agents:
                 try:
                     agent = self.sub_agents["search"]
-                    # Update agent's model based on complexity
-                    agent.model_type = self.route_to_model(complexity)
+                    # Let the search agent decide its own model - no routing from supervisor
                     result = await self.delegate_task(task, agent)
                     
                     if result.status == Status.COMPLETED:

@@ -7,7 +7,7 @@ from uuid import uuid4
 from agents.supervisor import SupervisorAgent
 from agents.base import BaseAgent
 from agents.models import Task, TaskResult, Status, Priority, AgentMessage
-from config.settings import ModelType, ComplexityLevel
+from config.settings import ModelType, TaskType
 
 class MockSubAgent(BaseAgent):
     """Mock sub-agent for testing."""
@@ -55,49 +55,49 @@ class TestSupervisorAgent:
         assert supervisor.sub_agents["search"] == mock_search_agent
     
     @pytest.mark.asyncio
-    async def test_analyze_query_complexity_simple(self, supervisor):
+    async def test_analyze_task_type_simple(self, supervisor):
         with patch.object(supervisor, '_call_llm', new_callable=AsyncMock) as mock_llm:
             mock_response = Mock()
-            mock_response.output_text = "SIMPLE"
+            mock_response.output_text = "DIRECT_ANSWER"
             mock_llm.return_value = mock_response
             
-            complexity = await supervisor.analyze_query_complexity("What is Python?")
-            assert complexity == ComplexityLevel.SIMPLE
+            task_type = await supervisor.analyze_task_type("What is Python?")
+            assert task_type == TaskType.DIRECT_ANSWER
     
     @pytest.mark.asyncio
-    async def test_analyze_query_complexity_moderate(self, supervisor):
+    async def test_analyze_task_type_moderate(self, supervisor):
         with patch.object(supervisor, '_call_llm', new_callable=AsyncMock) as mock_llm:
             mock_response = Mock()
             mock_response.output_text = "MODERATE"
             mock_llm.return_value = mock_response
             
-            complexity = await supervisor.analyze_query_complexity(
+            complexity = await supervisor.analyze_task_type(
                 "Compare Python and JavaScript for web development"
             )
-            assert complexity == ComplexityLevel.MODERATE
+            assert complexity == TaskType.SEARCH_NEEDED
     
     @pytest.mark.asyncio
-    async def test_analyze_query_complexity_complex(self, supervisor):
+    async def test_analyze_task_type_complex(self, supervisor):
         with patch.object(supervisor, '_call_llm', new_callable=AsyncMock) as mock_llm:
             mock_response = Mock()
-            mock_response.output_text = "COMPLEX"
+            mock_response.output_text = "RESEARCH_REPORT"
             mock_llm.return_value = mock_response
             
-            complexity = await supervisor.analyze_query_complexity(
+            task_type = await supervisor.analyze_task_type(
                 "Analyze the impact of AI on global economy over the next decade"
             )
-            assert complexity == ComplexityLevel.COMPLEX
+            assert task_type == TaskType.RESEARCH_REPORT
     
     @pytest.mark.asyncio
-    async def test_analyze_query_complexity_error_handling(self, supervisor):
+    async def test_analyze_task_type_error_handling(self, supervisor):
         with patch.object(supervisor, '_call_llm', side_effect=Exception("API Error")):
-            complexity = await supervisor.analyze_query_complexity("Test query")
-            assert complexity == ComplexityLevel.MODERATE  # Default fallback
+            complexity = await supervisor.analyze_task_type("Test query")
+            assert complexity == TaskType.SEARCH_NEEDED  # Default fallback
     
-    def test_route_to_model(self, supervisor):
-        assert supervisor.route_to_model(ComplexityLevel.SIMPLE) == ModelType.GPT5_NANO
-        assert supervisor.route_to_model(ComplexityLevel.MODERATE) == ModelType.GPT5_MINI
-        assert supervisor.route_to_model(ComplexityLevel.COMPLEX) == ModelType.GPT5_REGULAR
+    def test_get_reasoning_effort(self, supervisor):
+        assert supervisor.get_reasoning_effort(TaskType.DIRECT_ANSWER).name in ['LOW', 'MINIMAL']
+        assert supervisor.get_reasoning_effort(TaskType.SEARCH_NEEDED).name == 'MEDIUM' 
+        assert supervisor.get_reasoning_effort(TaskType.RESEARCH_REPORT).name == 'HIGH'
     
     @pytest.mark.asyncio
     async def test_decompose_query(self, supervisor):
@@ -220,18 +220,18 @@ class TestSupervisorAgent:
             complexity="simple"
         )
         
-        with patch.object(supervisor, 'analyze_query_complexity', return_value=ComplexityLevel.SIMPLE):
-            with patch.object(supervisor, 'delegate_task', new_callable=AsyncMock) as mock_delegate:
-                mock_result = TaskResult(
-                    agent_id="search",
-                    task_id="simple_task",
-                    status=Status.COMPLETED,
-                    result="Python is a programming language",
-                    citations=[],
-                    execution_time=1.0,
-                    model_used="gpt-5-mini"
-                )
-                mock_delegate.return_value = mock_result
+        with patch.object(supervisor, 'analyze_task_type', return_value=TaskType.DIRECT_ANSWER):
+            with patch.object(supervisor, '_handle_direct_answer', new_callable=AsyncMock) as mock_direct:
+                mock_direct_result = {
+                    "response": "Python is a programming language",
+                    "citations": [],
+                    "execution_time": 1.0,
+                    "model_used": "gpt-5",
+                    "total_tokens": 100,
+                    "tokens_used": {"input_tokens": 50, "output_tokens": 50, "total_tokens": 100},
+                    "task_type": "direct_answer"
+                }
+                mock_direct.return_value = mock_direct_result
                 
                 result = await supervisor.process_task(task)
                 
@@ -248,7 +248,7 @@ class TestSupervisorAgent:
             complexity="complex"
         )
         
-        with patch.object(supervisor, 'analyze_query_complexity', return_value=ComplexityLevel.COMPLEX):
+        with patch.object(supervisor, 'analyze_task_type', return_value=TaskType.RESEARCH_REPORT):
             with patch.object(supervisor, 'decompose_query', new_callable=AsyncMock) as mock_decompose:
                 subtasks = [
                     Task(id="sub1", description="Search economic data", complexity="simple", assigned_agent="search"),

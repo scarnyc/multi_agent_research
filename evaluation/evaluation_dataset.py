@@ -7,12 +7,12 @@ from pydantic import BaseModel
 from typing import List, Optional
 from enum import Enum
 import pandas as pd
-from config.settings import ComplexityLevel
+from config.settings import TaskType
 
 class EvalQuery(BaseModel):
     id: int
     query: str
-    complexity: ComplexityLevel
+    task_type: TaskType
     expected_sources: int  # Minimum number of sources expected
     requires_current_info: bool  # Whether query needs recent data
     domain: str  # Subject domain for categorization
@@ -27,7 +27,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=1,
         query="What is the speed of light in a vacuum?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="physics",
@@ -37,7 +37,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=2,
         query="Who invented the telephone?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="history",
@@ -47,7 +47,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=3,
         query="What is the chemical formula for water?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="chemistry",
@@ -57,7 +57,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=4,
         query="How many continents are there on Earth?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="geography",
@@ -67,7 +67,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=5,
         query="What is the largest planet in our solar system?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="astronomy",
@@ -77,7 +77,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=6,
         query="Who wrote '1984'?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="literature",
@@ -87,7 +87,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=7,
         query="What is the boiling point of water at sea level?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="physics",
@@ -97,7 +97,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=8,
         query="What year did World War II end?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="history",
@@ -107,7 +107,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=9,
         query="What is the primary function of red blood cells?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="biology",
@@ -117,7 +117,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=10,
         query="What programming language is known for its use in web browsers?",
-        complexity=ComplexityLevel.SIMPLE,
+        task_type=TaskType.DIRECT_ANSWER,
         expected_sources=1,
         requires_current_info=False,
         domain="technology",
@@ -131,7 +131,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=11,
         query="How does photosynthesis convert light energy into chemical energy?",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=3,
         requires_current_info=False,
         domain="biology",
@@ -141,7 +141,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=12,
         query="What are the key differences between supervised and unsupervised learning in machine learning?",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=3,
         requires_current_info=False,
         domain="technology",
@@ -151,7 +151,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=13,
         query="Explain the concept of supply and demand in economics with examples.",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=3,
         requires_current_info=False,
         domain="economics",
@@ -161,7 +161,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=14,
         query="How does the human immune system respond to viral infections?",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=3,
         requires_current_info=False,
         domain="medicine",
@@ -171,7 +171,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=15,
         query="What are the main causes and effects of the greenhouse effect?",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=3,
         requires_current_info=False,
         domain="environment",
@@ -181,7 +181,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=16,
         query="How do neural networks learn patterns through backpropagation?",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=3,
         requires_current_info=False,
         domain="ai",
@@ -191,7 +191,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=17,
         query="What are the key principles of object-oriented programming and why are they important?",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=3,
         requires_current_info=False,
         domain="technology",
@@ -201,7 +201,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=18,
         query="Explain how DNA replication ensures genetic continuity in cells.",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=3,
         requires_current_info=False,
         domain="biology",
@@ -211,7 +211,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=19,
         query="What are the main types of renewable energy and their advantages/disadvantages?",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=4,
         requires_current_info=True,
         domain="energy",
@@ -221,7 +221,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=20,
         query="How does blockchain technology ensure security and immutability of transactions?",
-        complexity=ComplexityLevel.MODERATE,
+        task_type=TaskType.SEARCH_NEEDED,
         expected_sources=3,
         requires_current_info=False,
         domain="technology",
@@ -235,7 +235,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=21,
         query="What are the latest breakthroughs in quantum error correction and how do they impact the feasibility of practical quantum computers?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="quantum_computing",
@@ -245,7 +245,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=22,
         query="How are transformer models like GPT revolutionizing natural language processing and what are their current limitations?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="ai",
@@ -255,7 +255,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=23,
         query="What are the most promising approaches to fusion energy and what technical challenges remain before commercial viability?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="energy",
@@ -265,7 +265,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=24,
         query="How is CRISPR-Cas9 gene editing being used in current medical trials and what ethical considerations are being debated?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="biotechnology",
@@ -275,7 +275,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=25,
         query="What are the competing theories about dark matter and dark energy, and what recent observations support or challenge them?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="astrophysics",
@@ -285,7 +285,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=26,
         query="How are central banks using digital currencies (CBDCs) and what implications do they have for monetary policy and privacy?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="finance",
@@ -295,7 +295,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=27,
         query="What are the latest developments in mRNA vaccine technology beyond COVID-19 and their potential applications in cancer treatment?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="medicine",
@@ -305,7 +305,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=28,
         query="How are autonomous vehicles solving the edge cases and ethical dilemmas in real-world deployment scenarios?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="autonomous_systems",
@@ -315,7 +315,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=29,
         query="What are the current approaches to achieving artificial general intelligence (AGI) and what are the key technical and philosophical challenges?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="ai",
@@ -325,7 +325,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=30,
         query="How is synthetic biology being used to create sustainable materials and what are the environmental and safety considerations?",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=5,
         requires_current_info=True,
         domain="biotechnology",
@@ -339,7 +339,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=31,
         query="Provide a comprehensive analysis of the current state of climate change mitigation strategies globally, including carbon capture technologies, renewable energy transitions, policy frameworks, and their effectiveness. Include specific country examples, recent COP agreements, technological breakthroughs, and projections for meeting Paris Agreement targets.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="climate_environment",
@@ -349,7 +349,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=32,
         query="Create a detailed report on the current landscape of artificial intelligence development, covering the latest large language models, computer vision breakthroughs, AI governance initiatives, major industry players, investment trends, ethical challenges, regulatory approaches across different countries, and predictions for AI's impact on employment and society over the next decade.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="ai_technology",
@@ -359,7 +359,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=33,
         query="Analyze the global semiconductor industry crisis and recovery, including supply chain vulnerabilities exposed during COVID-19, the geopolitics of chip manufacturing, major investments in new fabs, the role of Taiwan and TSMC, US CHIPS Act implications, China's semiconductor ambitions, and the impact on electric vehicles, AI development, and consumer electronics.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="technology_geopolitics",
@@ -369,7 +369,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=34,
         query="Provide an in-depth analysis of the space economy revolution, including commercial space ventures, satellite constellations for global internet, space tourism developments, lunar and Mars exploration plans, space mining prospects, international space law challenges, the role of SpaceX and other private companies, and projections for the space economy's growth through 2035.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="space_technology",
@@ -379,7 +379,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=35,
         query="Create a comprehensive report on the global energy transition, analyzing the shift from fossil fuels to renewables, the role of nuclear power including SMRs, energy storage solutions, grid modernization challenges, hydrogen economy developments, the impact on oil-producing nations, investment flows, policy mechanisms, and realistic timelines for achieving net-zero emissions in major economies.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="energy_environment",
@@ -389,7 +389,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=36,
         query="Analyze the biotechnology revolution in medicine, covering gene therapy advances, personalized medicine using genomics, organ regeneration and 3D bioprinting, the microbiome's role in health, aging research and longevity treatments, AI-driven drug discovery, regulatory challenges, ethical considerations, cost implications for healthcare systems, and projections for how medicine will transform by 2040.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="biotechnology_medicine",
@@ -399,7 +399,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=37,
         query="Provide a detailed assessment of the global financial system's digital transformation, including central bank digital currencies, cryptocurrency adoption and regulation, DeFi ecosystem growth, traditional banking disruption, cross-border payment innovations, financial inclusion initiatives, cybersecurity challenges, the role of stablecoins, NFTs and tokenization of assets, and predictions for the future of money and banking.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="finance_technology",
@@ -409,7 +409,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=38,
         query="Create a comprehensive analysis of quantum computing's progress toward practical applications, covering current qubit technologies, error correction breakthroughs, quantum algorithms development, the quantum advantage demonstrations, major players (IBM, Google, IonQ, etc.), quantum networking and cryptography, potential impacts on drug discovery, materials science, and cryptography, timeline for fault-tolerant quantum computers, and investment trends in the quantum sector.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="quantum_technology",
@@ -419,7 +419,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=39,
         query="Analyze the future of work and automation, examining how AI and robotics are transforming industries, which jobs are most at risk and which are emerging, reskilling and education initiatives, the four-day workweek experiments, remote work's permanent changes to business, the gig economy evolution, universal basic income debates, demographic shifts impact on labor markets, and policy responses to technological unemployment across different countries.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="economics_society",
@@ -429,7 +429,7 @@ EVALUATION_QUERIES = [
     EvalQuery(
         id=40,
         query="Provide an in-depth report on global food security and agricultural innovation, covering climate change impacts on crop yields, precision agriculture and AI in farming, vertical farming and alternative proteins, genetic modification and CRISPR in crops, water scarcity solutions, supply chain resilience, food waste reduction technologies, the role of insects and lab-grown meat, policy approaches to ensure food security, and projections for feeding 10 billion people by 2050.",
-        complexity=ComplexityLevel.COMPLEX,
+        task_type=TaskType.RESEARCH_REPORT,
         expected_sources=10,
         requires_current_info=True,
         domain="agriculture_environment",
@@ -438,9 +438,9 @@ EVALUATION_QUERIES = [
     ),
 ]
 
-def get_queries_by_complexity(complexity: ComplexityLevel) -> List[EvalQuery]:
+def get_queries_by_task_type(task_type: TaskType) -> List[EvalQuery]:
     """Get all queries of a specific complexity level"""
-    return [q for q in EVALUATION_QUERIES if q.complexity == complexity]
+    return [q for q in EVALUATION_QUERIES if q.task_type == task_type]
 
 def get_queries_by_type(query_type: str) -> List[EvalQuery]:
     """Get all queries of a specific type (qa or research)"""
@@ -465,7 +465,7 @@ def to_pandas() -> pd.DataFrame:
         data.append({
             'id': query.id,
             'query': query.query,
-            'complexity': query.complexity.value,
+            'task_type': query.task_type.value,
             'expected_sources': query.expected_sources,
             'requires_current_info': query.requires_current_info,
             'domain': query.domain,
@@ -529,7 +529,7 @@ def print_dataset_summary():
     
     for query in EVALUATION_QUERIES:
         # Count by complexity
-        complexity_key = query.complexity.value
+        complexity_key = query.task_type.value
         by_complexity[complexity_key] = by_complexity.get(complexity_key, 0) + 1
         
         # Count by domain
@@ -543,7 +543,7 @@ def print_dataset_summary():
         queries = [q for q in EVALUATION_QUERIES if q.query_type == query_type]
         complexity_breakdown = {}
         for q in queries:
-            complexity_breakdown[q.complexity.value] = complexity_breakdown.get(q.complexity.value, 0) + 1
+            complexity_breakdown[q.task_type.value] = complexity_breakdown.get(q.task_type.value, 0) + 1
         print(f"  {query_type}: {count} queries")
         for complexity, c_count in complexity_breakdown.items():
             print(f"    - {complexity}: {c_count}")

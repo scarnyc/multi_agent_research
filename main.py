@@ -52,7 +52,7 @@ async def run_simple_research(query: str):
         
         print("📋 Results:")
         print(f"  Model Used: {result.model_used}")
-        print(f"  Complexity: {result.complexity_detected.value}")
+        print(f"  Task Type: {result.task_type_detected.value}")
         print(f"  Execution Time: {result.execution_time:.2f}s")
         print(f"  Token Usage: {result.token_usage['total_tokens']}")
         print(f"  Sources Found: {len(result.sources)}")
