@@ -159,6 +159,36 @@ def setup_phoenix():
     
     return True
 
+def launch_notebook():
+    """Launch the Jupyter evaluation notebook."""
+    import subprocess
+    from pathlib import Path
+    
+    try:
+        print("📊 Launching Jupyter Evaluation Notebook...")
+        print("🌐 Opening in your default browser...")
+        
+        notebook_path = Path(__file__).parent / "evaluation" / "multi_agent_evaluation_notebook.ipynb"
+        
+        if not notebook_path.exists():
+            print(f"❌ Notebook not found: {notebook_path}")
+            print("💡 Try running from the project root directory")
+            return
+        
+        # Launch Jupyter
+        subprocess.run([
+            sys.executable, "-m", "jupyter", "notebook", 
+            str(notebook_path),
+            "--NotebookApp.open_browser=True"
+        ], check=True)
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to launch notebook: {e}")
+        print("💡 Install Jupyter: pip install jupyter ipywidgets")
+        print("💡 Or use: python3 launch_notebook.py")
+    except KeyboardInterrupt:
+        print("\n🛑 Notebook server stopped")
+
 def main():
     """Main CLI interface"""
     parser = argparse.ArgumentParser(
@@ -167,6 +197,7 @@ def main():
                "  python main.py simple 'What is machine learning?'\n"
                "  python main.py multi 'Analyze climate change trends'\n"
                "  python main.py eval\n"
+               "  python main.py notebook\n"
                "  python main.py setup",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -183,6 +214,9 @@ def main():
     
     # Evaluation command
     eval_parser = subparsers.add_parser('eval', help='Run evaluation suite')
+    
+    # Notebook command
+    notebook_parser = subparsers.add_parser('notebook', help='Launch Jupyter evaluation notebook')
     
     # Setup command
     setup_parser = subparsers.add_parser('setup', help='Setup Phoenix integration')
@@ -216,6 +250,8 @@ def main():
             asyncio.run(run_multi_agent_research(args.query))
         elif args.command == 'eval':
             asyncio.run(run_evaluation())
+        elif args.command == 'notebook':
+            launch_notebook()
         elif args.command == 'setup':
             setup_phoenix()
         else:
